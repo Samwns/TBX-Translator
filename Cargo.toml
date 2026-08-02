@@ -2,6 +2,7 @@
 name = "tbx-translator"
 version = "0.0.1-alpha"
 edition = "2021"
+default-run = "tbx-translator"
 authors = ["samwns"]
 description = "TBX Translator : Toolbox - Translator (alpha)"
 
