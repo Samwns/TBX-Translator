@@ -15,7 +15,14 @@ fn main() -> ExitCode {
     };
 
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    match Command::new("bash").arg(root.join(script)).status() {
+    let shell = if cfg!(windows) {
+        env::var("TBX_MSYS_BASH")
+            .unwrap_or_else(|_| r"C:\msys64\usr\bin\bash.exe".into())
+    } else {
+        "bash".into()
+    };
+
+    match Command::new(shell).arg(root.join(script)).status() {
         Ok(status) if status.success() => ExitCode::SUCCESS,
         Ok(status) => ExitCode::from(status.code().unwrap_or(1) as u8),
         Err(error) => {

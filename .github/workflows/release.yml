@@ -31,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install GTK4 and packaging tools
-        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev ruby-full
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev ruby-full libarchive-tools
       - name: Create Linux release packages
         run: cargo package-linux
       - uses: actions/upload-artifact@v4
@@ -52,6 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: msys2/setup-msys2@v2
+        id: msys2
         with:
           msystem: MINGW64
           update: true
@@ -62,6 +63,8 @@ jobs:
             mingw-w64-x86_64-rust
             zip
       - name: Create Windows installer
+        env:
+          TBX_MSYS_BASH: ${{ steps.msys2.outputs.msys2-location }}\usr\bin\bash.exe
         run: |
           export PATH="/mingw64/bin:$PATH"
           cargo package-windows
