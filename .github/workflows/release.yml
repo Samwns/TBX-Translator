@@ -76,7 +76,7 @@ jobs:
           cargo build --release
           mkdir -p release/TBX-Translator-Windows-x64
           cp target/release/tbx-translator.exe release/TBX-Translator-Windows-x64/TBX-Translator.exe
-          dotnet publish unity_static_extractor/unity_static_extractor.csproj \
+          "/c/Program Files/dotnet/dotnet.exe" publish unity_static_extractor/unity_static_extractor.csproj \
             --configuration Release --runtime win-x64 --self-contained true \
             --output release/TBX-Translator-Windows-x64/unity_static_extractor
           cp -r assets BepInEx XUnity_AutoTranslator_bepInEx release/TBX-Translator-Windows-x64/
