@@ -8,6 +8,7 @@ AppId={{D9B5B82C-9E89-43BF-881D-43D90E5EE250}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+UninstallDisplayIcon={app}\assets\com.tbx.translator.ico
 DefaultDirName={autopf}\TBX Translator
 DefaultGroupName=TBX Translator
 OutputDir=release
@@ -21,8 +22,8 @@ ArchitecturesInstallIn64BitMode=x64
 Source: "release\TBX-Translator-Windows-x64\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Icons]
-Name: "{autoprograms}\TBX Translator"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\TBX Translator"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\TBX Translator"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\com.tbx.translator.ico"
+Name: "{autodesktop}\TBX Translator"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\com.tbx.translator.ico"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked

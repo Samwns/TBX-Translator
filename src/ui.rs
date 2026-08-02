@@ -30,10 +30,7 @@ const IDIOMAS: &[&str] = &[
 // ── CSS — exact colors from style.css + GTK4 animations ────────────
 const CSS: &str = "
 /* ─── Global ───────────────────────────────────────────────────── */
-* {
-    font-family: 'Segoe UI', 'Noto Sans', 'Inter', sans-serif;
-    text-shadow: 1px 1px 1px #000000;
-}
+* { font-family: sans-serif; }
 
 window.main-transparent {
     background-color: transparent;
@@ -145,12 +142,11 @@ window.main-transparent {
 label { 
     color: #ffffff; 
     font-size: 14px; 
-    text-shadow: 1px 1px 2px #000000;
 }
 .detected-label { font-weight: bold; color: #ffffff; }
 .muted-label { color: #a6adc8; font-size: 13px; }
-.section-label-purple { color: #cba6f7; font-weight: bold; font-size: 13px; text-shadow: 1px 1px 2px #11111b; }
-.settings-title { font-size: 20px; font-weight: bold; color: #cba6f7; text-shadow: 2px 2px 3px #000000; }
+.section-label-purple { color: #cba6f7; font-weight: bold; font-size: 13px; }
+.settings-title { font-size: 20px; font-weight: bold; color: #cba6f7; }
 .warning-label { color: #f38ba8; font-size: 11px; }
 
 /* ─── Entries ───────────────────────────────────────────────────── */
@@ -178,7 +174,6 @@ combobox button {
     border-right-color: #a6adc8;
     padding: 7px 10px;
     transition: background-color 150ms ease;
-    text-shadow: 1px 1px 1px #000000;
 }
 combobox button:hover { background-color: #3d3f55; }
 
@@ -271,9 +266,8 @@ combobox button:hover { background-color: #3d3f55; }
     border-right-color: #11111b;
     padding: 8px 16px;
     transition: background-color 150ms ease, color 150ms ease;
-    text-shadow: 1px 1px 1px #000000;
 }
-.btn-browse:hover { background-color: #cba6f7; color: #11111b; text-shadow: none; }
+.btn-browse:hover { background-color: #cba6f7; color: #11111b; }
 .btn-browse:active {
     border-top-color: #11111b;
     border-left-color: #11111b;
@@ -339,7 +333,6 @@ combobox button:hover { background-color: #3d3f55; }
     font-weight: bold;
     padding: 4px 10px;
     transition: background-color 220ms ease, border-color 220ms ease, color 150ms ease;
-    text-shadow: 1px 1px 1px #000000;
 }
 .switch-toggle:hover { background-color: #585b70; }
 .switch-toggle:checked { 
@@ -348,7 +341,6 @@ combobox button:hover { background-color: #3d3f55; }
     border-top-color: #11111b;
     border-left-color: #11111b;
     color: #11111b; 
-    text-shadow: none; 
 }
 .switch-toggle:checked:hover { background-color: #94d58d; }
 .switch-toggle:disabled { opacity: 0.4; }
@@ -387,7 +379,6 @@ progressbar progress {
     color: #a6e3a1;
     font-family: 'Consolas', 'JetBrains Mono', 'Monospace';
     font-size: 13px;
-    text-shadow: 0px 0px 2px #a6e3a1;
 }
 .log-view { 
     background-color: #0b0b12; 
