@@ -224,7 +224,10 @@ combobox button:hover { background-color: #3d3f55; }
     animation: none;
     box-shadow: 0 4px 18px rgba(249,226,175,0.4);
 }
-.btn-translate-renpy label { color: #11111b; }
+.btn-translate-renpy label {
+    color: #ffffff;
+    text-shadow: 1px 1px 0 #11111b;
+}
 
 .btn-translate-unity {
     background-color: #89b4fa;
@@ -242,7 +245,10 @@ combobox button:hover { background-color: #3d3f55; }
     animation: none;
     box-shadow: 0 4px 18px rgba(137,180,250,0.4);
 }
-.btn-translate-unity label { color: #11111b; }
+.btn-translate-unity label {
+    color: #ffffff;
+    text-shadow: 1px 1px 0 #11111b;
+}
 
 .btn-editor {
     background-color: #89b4fa;
@@ -255,7 +261,10 @@ combobox button:hover { background-color: #3d3f55; }
     transition: background-color 180ms ease;
 }
 .btn-editor:hover { background-color: #74c7ec; }
-.btn-editor label { color: #11111b; }
+.btn-editor label {
+    color: #ffffff;
+    text-shadow: 1px 1px 0 #11111b;
+}
 
 .btn-browse {
     background-color: #313244;
