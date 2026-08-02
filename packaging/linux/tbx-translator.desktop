@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=TBX Translator
+Comment=Game translation toolbox
+Exec=tbx-translator
+Icon=com.tbx.translator
+Categories=Utility;Game;
+Terminal=false

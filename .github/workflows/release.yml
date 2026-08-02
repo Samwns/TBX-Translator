@@ -30,23 +30,41 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install GTK4 development files
-        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev
+      - name: Install GTK4 and packaging tools
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev ruby-full
       - name: Build Linux application and Unity extractor
         run: |
           cargo build --release
-          mkdir -p release/TBX-Translator-Linux-x64
-          install -m 755 target/release/tbx-translator release/TBX-Translator-Linux-x64/TBX-Translator
+          mkdir -p package-root/opt/tbx-translator
+          install -m 755 target/release/tbx-translator package-root/opt/tbx-translator/TBX-Translator
           dotnet publish unity_static_extractor/unity_static_extractor.csproj \
             --configuration Release --runtime linux-x64 --self-contained true \
-            --output release/TBX-Translator-Linux-x64/unity_static_extractor
-          cp -r assets BepInEx XUnity_AutoTranslator_bepInEx release/TBX-Translator-Linux-x64/
-          cp README.md LICENSE release/TBX-Translator-Linux-x64/
-          tar -C release -czf release/TBX-Translator-Linux-x64.tar.gz TBX-Translator-Linux-x64
+            --output package-root/opt/tbx-translator/unity_static_extractor
+          cp -r assets BepInEx XUnity_AutoTranslator_bepInEx package-root/opt/tbx-translator/
+          install -Dm755 packaging/linux/tbx-translator package-root/usr/bin/tbx-translator
+          install -Dm644 packaging/linux/tbx-translator.desktop package-root/usr/share/applications/tbx-translator.desktop
+          install -Dm644 assets/com.tbx.translator.svg package-root/usr/share/icons/hicolor/scalable/apps/com.tbx.translator.svg
+          gem install fpm --no-document
+          mkdir -p release
+          fpm -s dir -t deb -n tbx-translator -v 0.0.1 -C package-root -p release/TBX-Translator-Debian-Ubuntu-amd64.deb --license "CC-BY-NC-SA-4.0" --depends libgtk-4-1 opt usr
+          fpm -s dir -t rpm -n tbx-translator -v 0.0.1 -C package-root -p release/TBX-Translator-Fedora-x86_64.rpm --license "CC-BY-NC-SA-4.0" --depends gtk4 opt usr
+          fpm -s dir -t pacman -n tbx-translator -v 0.0.1 -C package-root -p release/TBX-Translator-Arch-x86_64.pkg.tar.zst --license "CC-BY-NC-SA-4.0" --depends gtk4 opt usr
+          mkdir -p AppDir/usr/bin
+          cp -r package-root/opt/tbx-translator/* AppDir/usr/bin/
+          install -m755 packaging/linux/AppRun AppDir/AppRun
+          cp packaging/linux/tbx-translator.desktop AppDir/tbx-translator.desktop
+          cp assets/com.tbx.translator.svg AppDir/com.tbx.translator.svg
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
+          chmod +x appimagetool
+          ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool AppDir release/TBX-Translator-x86_64.AppImage
       - uses: actions/upload-artifact@v4
         with:
           name: TBX-Translator-Linux-x64
-          path: release/TBX-Translator-Linux-x64.tar.gz
+          path: |
+            release/TBX-Translator-Debian-Ubuntu-amd64.deb
+            release/TBX-Translator-Fedora-x86_64.rpm
+            release/TBX-Translator-Arch-x86_64.pkg.tar.zst
+            release/TBX-Translator-x86_64.AppImage
 
   windows:
     name: Build Windows x64
@@ -82,11 +100,15 @@ jobs:
           cp -r assets BepInEx XUnity_AutoTranslator_bepInEx release/TBX-Translator-Windows-x64/
           cp /mingw64/bin/*.dll release/TBX-Translator-Windows-x64/
           cp README.md LICENSE release/TBX-Translator-Windows-x64/
-          cd release && zip -r TBX-Translator-Windows-x64.zip TBX-Translator-Windows-x64
+      - name: Build Windows installer
+        shell: powershell
+        run: choco install innosetup -y
+      - name: Package Windows installer
+        run: '"/c/Program Files (x86)/Inno Setup 6/ISCC.exe" packaging/windows/tbx-translator.iss'
       - uses: actions/upload-artifact@v4
         with:
           name: TBX-Translator-Windows-x64
-          path: release/TBX-Translator-Windows-x64.zip
+          path: release/TBX-Translator-Setup.exe
 
   publish:
     name: Publish GitHub release
@@ -105,5 +127,8 @@ jobs:
           prerelease: ${{ inputs.prerelease || false }}
           generate_release_notes: true
           files: |
-            release-artifacts/**/*.tar.gz
-            release-artifacts/**/*.zip
+            release-artifacts/**/*.deb
+            release-artifacts/**/*.rpm
+            release-artifacts/**/*.pkg.tar.zst
+            release-artifacts/**/*.AppImage
+            release-artifacts/**/*.exe
