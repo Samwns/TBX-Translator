@@ -3,3 +3,4 @@ linker = "x86_64-w64-mingw32-gcc"
 
 [alias]
 package-linux = "!scripts/package-linux.sh"
+package-windows = "!scripts/package-windows.sh"
