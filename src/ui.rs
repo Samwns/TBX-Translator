@@ -214,7 +214,7 @@ combobox button:hover { background-color: #3d3f55; }
     font-weight: bold;
     font-size: 15px;
     border-radius: 10px;
-    border: 2px solid #11111b;
+    border: none;
     padding: 14px 32px;
     animation: pulse-glow 2.5s ease-in-out infinite;
     transition: background-color 180ms ease, box-shadow 180ms ease;
