@@ -89,6 +89,28 @@ jobs:
           name: ${{ inputs.release_name || format('TBX Translator {0}', github.ref_name) }}
           prerelease: ${{ inputs.prerelease || false }}
           generate_release_notes: true
+          body: |
+            ## TBX Translator ${{ inputs.tag_name || github.ref_name }}
+
+            **Status:** Alpha
+
+            ### Downloads
+
+            - **Windows:** `TBX-Translator-Setup.exe`
+            - **Debian / Ubuntu:** `TBX-Translator-Debian-Ubuntu-amd64.deb`
+            - **Fedora:** `TBX-Translator-Fedora-x86_64.rpm`
+            - **Arch Linux:** `TBX-Translator-Arch-x86_64.pkg.tar.zst`
+            - **Linux portátil:** `TBX-Translator-x86_64.AppImage`
+
+            ### Apoie o projeto
+
+            [Ko-fi — samwns](https://ko-fi.com/samwns)
+
+            ### Licença
+
+            CC BY-NC-SA 4.0 — uso e redistribuição não comerciais, com atribuição.
+
+            **Full Changelog**: https://github.com/${{ github.repository }}/commits/${{ inputs.tag_name || github.ref_name }}
           files: |
             release-artifacts/**/*.deb
             release-artifacts/**/*.rpm
