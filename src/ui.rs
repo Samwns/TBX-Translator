@@ -100,7 +100,7 @@ window.main-transparent {
 /* ─── Window controls ───────────────────────────────────────────── */
 .btn-win {
     background-color: transparent;
-    border: 2px solid #11111b;
+    border: none;
     font-size: 15px;
     min-width: 0;
     padding: 4px 8px;
@@ -226,6 +226,8 @@ combobox button:hover { background-color: #3d3f55; }
 }
 .btn-translate-renpy label {
     color: #ffffff;
+    text-shadow: -1px -1px 0 #11111b, 1px -1px 0 #11111b,
+                 -1px 1px 0 #11111b, 1px 1px 0 #11111b;
 }
 
 .btn-translate-unity {
@@ -234,7 +236,7 @@ combobox button:hover { background-color: #3d3f55; }
     font-weight: bold;
     font-size: 15px;
     border-radius: 10px;
-    border: 2px solid #11111b;
+    border: none;
     padding: 14px 32px;
     animation: pulse-glow-unity 2.5s ease-in-out infinite;
     transition: background-color 180ms ease, box-shadow 180ms ease;
@@ -246,6 +248,8 @@ combobox button:hover { background-color: #3d3f55; }
 }
 .btn-translate-unity label {
     color: #ffffff;
+    text-shadow: -1px -1px 0 #11111b, 1px -1px 0 #11111b,
+                 -1px 1px 0 #11111b, 1px 1px 0 #11111b;
 }
 
 .btn-editor {
@@ -254,13 +258,15 @@ combobox button:hover { background-color: #3d3f55; }
     font-weight: bold;
     font-size: 14px;
     border-radius: 10px;
-    border: 2px solid #11111b;
+    border: none;
     padding: 14px 24px;
     transition: background-color 180ms ease;
 }
 .btn-editor:hover { background-color: #74c7ec; }
 .btn-editor label {
     color: #ffffff;
+    text-shadow: -1px -1px 0 #11111b, 1px -1px 0 #11111b,
+                 -1px 1px 0 #11111b, 1px 1px 0 #11111b;
 }
 
 .btn-browse {
