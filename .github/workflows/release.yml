@@ -102,7 +102,7 @@ jobs:
           cp README.md LICENSE release/TBX-Translator-Windows-x64/
       - name: Build Windows installer
         shell: powershell
-        run: choco install innosetup -y
+        run: choco upgrade innosetup -y --no-progress
       - name: Package Windows installer
         run: '"/c/Program Files (x86)/Inno Setup 6/ISCC.exe" packaging/windows/tbx-translator.iss'
       - uses: actions/upload-artifact@v4

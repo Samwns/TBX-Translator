@@ -11,15 +11,15 @@ AppPublisher={#MyAppPublisher}
 UninstallDisplayIcon={app}\assets\com.tbx.translator.ico
 DefaultDirName={autopf}\TBX Translator
 DefaultGroupName=TBX Translator
-OutputDir=release
+OutputDir=..\..\release
 OutputBaseFilename=TBX-Translator-Setup
-SetupIconFile=assets\com.tbx.translator.ico
+SetupIconFile=..\..\assets\com.tbx.translator.ico
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64
 
 [Files]
-Source: "release\TBX-Translator-Windows-x64\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+Source: "..\..\release\TBX-Translator-Windows-x64\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Icons]
 Name: "{autoprograms}\TBX Translator"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\com.tbx.translator.ico"
