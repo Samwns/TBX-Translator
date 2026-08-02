@@ -2,6 +2,6 @@
 linker = "x86_64-w64-mingw32-gcc"
 
 [alias]
-package-linux = "!scripts/package-linux.sh"
-package-windows = "!scripts/package-windows.sh"
-package-all = "!scripts/package-all.sh"
+package-linux = "run --bin tbx-package -- linux"
+package-windows = "run --bin tbx-package -- windows"
+package-all = "run --bin tbx-package -- all"
