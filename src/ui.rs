@@ -887,7 +887,26 @@ pub fn build_ui(app: &Application) {
     let tab_lbl_unity = Label::new(Some("Unity"));
     notebook.append_page(&bx_unity, Some(&tab_lbl_unity));
     
-    engine_win.set_child(Some(&notebook));
+    let engine_root = Box::new(Orientation::Vertical, 0);
+    let engine_header = Box::new(Orientation::Horizontal, 8);
+    engine_header.set_margin_top(8);
+    engine_header.set_margin_bottom(4);
+    engine_header.set_margin_start(12);
+    engine_header.set_margin_end(8);
+    let engine_title = Label::new(Some("Configurações dos Motores"));
+    engine_title.add_css_class("section-label-purple");
+    engine_title.set_hexpand(true);
+    engine_title.set_halign(gtk::Align::Start);
+    let engine_close = Button::with_label("✕");
+    engine_close.add_css_class("btn-win");
+    engine_close.add_css_class("btn-win-close");
+    let engine_win_for_close = engine_win.clone();
+    engine_close.connect_clicked(move |_| engine_win_for_close.close());
+    engine_header.append(&engine_title);
+    engine_header.append(&engine_close);
+    engine_root.append(&engine_header);
+    engine_root.append(&notebook);
+    engine_win.set_child(Some(&engine_root));
 
     let btn_engine_configs = Button::with_label("Configurações dos Motores");
     btn_engine_configs.add_css_class("btn-save-config");

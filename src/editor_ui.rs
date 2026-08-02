@@ -67,6 +67,12 @@ pub fn show_editor(app: &Application, folder: PathBuf) {
     let top_bar = Box::new(Orientation::Horizontal, 10);
     top_bar.append(&search_bar);
     top_bar.append(&btn_save);
+    let btn_close = Button::with_label("✕");
+    btn_close.add_css_class("btn-win");
+    btn_close.add_css_class("btn-win-close");
+    let editor_window = window.clone();
+    btn_close.connect_clicked(move |_| editor_window.close());
+    top_bar.append(&btn_close);
     search_bar.set_hexpand(true);
 
     content_box.append(&top_bar);
