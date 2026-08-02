@@ -1,0 +1,23 @@
+# Build outputs
+/target/
+/release/
+/unity_static_extractor/bin/
+/unity_static_extractor/obj/
+
+# IDEs and operating system files
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Logs and local application settings
+*.log
+logs/
+.tbx-translator/
+config.properties
+
+# Temporary files generated while processing games
+tpg_temp/
+dump.txt
+tpg_boot.rpyc
+tpg_dumper.rpyc

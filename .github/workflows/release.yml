@@ -1,0 +1,109 @@
+name: Create release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Tag da release (ex.: v0.0.1-alpha)"
+        required: true
+        default: "v0.0.1-alpha"
+        type: string
+      release_name:
+        description: "Nome mostrado na release"
+        required: true
+        default: "TBX Translator v0.0.1-alpha"
+        type: string
+      prerelease:
+        description: "Marcar como pré-release/alpha"
+        required: true
+        default: true
+        type: boolean
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    name: Build Linux x64
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GTK4 development files
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev
+      - name: Build Linux application and Unity extractor
+        run: |
+          cargo build --release
+          mkdir -p release/TBX-Translator-Linux-x64
+          install -m 755 target/release/tbx-translator release/TBX-Translator-Linux-x64/TBX-Translator
+          dotnet publish unity_static_extractor/unity_static_extractor.csproj \
+            --configuration Release --runtime linux-x64 --self-contained true \
+            --output release/TBX-Translator-Linux-x64/unity_static_extractor
+          cp -r assets BepInEx XUnity_AutoTranslator_bepInEx release/TBX-Translator-Linux-x64/
+          cp README.md LICENSE release/TBX-Translator-Linux-x64/
+          tar -C release -czf release/TBX-Translator-Linux-x64.tar.gz TBX-Translator-Linux-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TBX-Translator-Linux-x64
+          path: release/TBX-Translator-Linux-x64.tar.gz
+
+  windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gtk4
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-rust
+            zip
+      - name: Build Windows application and Unity extractor
+        run: |
+          # Use the MSYS2/MinGW64 Rust toolchain. GTK4 and pkg-config then
+          # target Windows natively, instead of being cross-compiled from MSVC.
+          export PATH="/mingw64/bin:$PATH"
+          command -v cargo
+          rustc -Vv
+          cargo build --release
+          mkdir -p release/TBX-Translator-Windows-x64
+          cp target/release/tbx-translator.exe release/TBX-Translator-Windows-x64/TBX-Translator.exe
+          dotnet publish unity_static_extractor/unity_static_extractor.csproj \
+            --configuration Release --runtime win-x64 --self-contained true \
+            --output release/TBX-Translator-Windows-x64/unity_static_extractor
+          cp -r assets BepInEx XUnity_AutoTranslator_bepInEx release/TBX-Translator-Windows-x64/
+          cp /mingw64/bin/*.dll release/TBX-Translator-Windows-x64/
+          cp README.md LICENSE release/TBX-Translator-Windows-x64/
+          cd release && zip -r TBX-Translator-Windows-x64.zip TBX-Translator-Windows-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TBX-Translator-Windows-x64
+          path: release/TBX-Translator-Windows-x64.zip
+
+  publish:
+    name: Publish GitHub release
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+      - name: Create release with both packages
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ inputs.release_name || format('TBX Translator {0}', github.ref_name) }}
+          prerelease: ${{ inputs.prerelease || false }}
+          generate_release_notes: true
+          files: |
+            release-artifacts/**/*.tar.gz
+            release-artifacts/**/*.zip
