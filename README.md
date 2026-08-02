@@ -8,7 +8,7 @@
   **Versão: `0.0.1-alpha`**
 
   [![Release](https://img.shields.io/github/v/release/Samwns/TBX-Translator?display_name=tag&sort=semver)](https://github.com/Samwns/TBX-Translator/releases/latest)
-  [![License](https://img.shields.io/github/license/Samwns/TBX-Translator)](LICENSE)
+  [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](LICENSE)
   [![Rust](https://img.shields.io/badge/Rust-2021-orange?logo=rust)](https://www.rust-lang.org/)
   [![GTK4](https://img.shields.io/badge/GTK-4-7FE719?logo=gtk)](https://www.gtk.org/)
 
