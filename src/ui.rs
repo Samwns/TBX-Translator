@@ -395,6 +395,17 @@ progressbar progress {
     font-family: 'Consolas', 'JetBrains Mono', 'Monospace';
     font-size: 13px;
 }
+.log-tab-close {
+    min-width: 0;
+    min-height: 0;
+    padding: 0 5px;
+    margin: 0;
+    border: none;
+    background: transparent;
+    color: #f38ba8;
+    font-weight: bold;
+}
+.log-tab-close:hover { background-color: #f38ba8; color: #11111b; }
 .log-view { 
     background-color: #0b0b12; 
     border: 3px solid #313244; 
@@ -420,6 +431,42 @@ pub enum UiMsg {
     Log(String),
     Progress(usize, usize),
     Done(String),
+}
+
+fn log_tab_title(notebook: &gtk::Notebook, page: &gtk::Widget) -> Option<String> {
+    let tab = notebook.tab_label(page)?;
+    if let Ok(label) = tab.clone().downcast::<Label>() {
+        return Some(label.text().to_string());
+    }
+    tab.downcast::<Box>().ok()?
+        .first_child()?
+        .downcast::<Label>()
+        .ok()
+        .map(|label| label.text().to_string())
+}
+
+fn append_log_tab(notebook: &gtk::Notebook, scroll: &ScrolledWindow, title: &str, closable: bool) {
+    if !closable {
+        notebook.append_page(scroll, Some(&Label::new(Some(title))));
+        return;
+    }
+
+    let tab = Box::new(Orientation::Horizontal, 5);
+    let label = Label::new(Some(title));
+    let close = Button::with_label("×");
+    close.add_css_class("log-tab-close");
+    close.set_tooltip_text(Some("Fechar log"));
+    tab.append(&label);
+    tab.append(&close);
+
+    let notebook_for_close = notebook.clone();
+    let scroll_for_close = scroll.clone();
+    close.connect_clicked(move |_| {
+        if let Some(page) = notebook_for_close.page_num(&scroll_for_close) {
+            notebook_for_close.remove_page(Some(page));
+        }
+    });
+    notebook.append_page(scroll, Some(&tab));
 }
 
 pub fn append_log(buf: &TextBuffer, msg: &str) {
@@ -1262,14 +1309,12 @@ pub fn build_ui(app: &Application) {
                   let mut existing_buffer: Option<TextBuffer> = None;
                   for i in 0..log_notebook.n_pages() {
                       if let Some(page) = log_notebook.nth_page(Some(i)) {
-                          if let Some(label) = log_notebook.tab_label(&page).and_then(|w| w.downcast::<Label>().ok()) {
-                              if label.text() == game_name {
-                                  if let Some(scroll) = page.downcast::<ScrolledWindow>().ok() {
-                                      if let Some(tv) = scroll.child().and_then(|w| w.downcast::<TextView>().ok()) {
-                                          existing_buffer = Some(tv.buffer());
-                                          log_notebook.set_current_page(Some(i));
-                                          break;
-                                      }
+                          if log_tab_title(&log_notebook, &page).as_deref() == Some(&game_name) {
+                              if let Some(scroll) = page.downcast::<ScrolledWindow>().ok() {
+                                  if let Some(tv) = scroll.child().and_then(|w| w.downcast::<TextView>().ok()) {
+                                      existing_buffer = Some(tv.buffer());
+                                      log_notebook.set_current_page(Some(i));
+                                      break;
                                   }
                               }
                           }
@@ -1288,7 +1333,7 @@ pub fn build_ui(app: &Application) {
                       tv.set_cursor_visible(false);
                       let scroll = ScrolledWindow::new();
                       scroll.set_child(Some(&tv));
-                      log_notebook.append_page(&scroll, Some(&Label::new(Some(&game_name))));
+                      append_log_tab(&log_notebook, &scroll, &game_name, true);
                       log_notebook.set_current_page(Some(log_notebook.n_pages() - 1));
                       buf
                   };
@@ -1414,14 +1459,12 @@ pub fn build_ui(app: &Application) {
               let mut existing_buffer: Option<TextBuffer> = None;
               for i in 0..log_notebook.n_pages() {
                   if let Some(page) = log_notebook.nth_page(Some(i)) {
-                      if let Some(label) = log_notebook.tab_label(&page).and_then(|w| w.downcast::<Label>().ok()) {
-                          if label.text() == tab_title {
-                              if let Some(scroll) = page.downcast::<ScrolledWindow>().ok() {
-                                  if let Some(tv) = scroll.child().and_then(|w| w.downcast::<TextView>().ok()) {
-                                      existing_buffer = Some(tv.buffer());
-                                      log_notebook.set_current_page(Some(i));
-                                      break;
-                                  }
+                      if log_tab_title(&log_notebook, &page).as_deref() == Some(&tab_title) {
+                          if let Some(scroll) = page.downcast::<ScrolledWindow>().ok() {
+                              if let Some(tv) = scroll.child().and_then(|w| w.downcast::<TextView>().ok()) {
+                                  existing_buffer = Some(tv.buffer());
+                                  log_notebook.set_current_page(Some(i));
+                                  break;
                               }
                           }
                       }
@@ -1440,7 +1483,7 @@ pub fn build_ui(app: &Application) {
                   tv.set_cursor_visible(false);
                   let scroll = ScrolledWindow::new();
                   scroll.set_child(Some(&tv));
-                  log_notebook.append_page(&scroll, Some(&Label::new(Some(&tab_title))));
+                  append_log_tab(&log_notebook, &scroll, &tab_title, true);
                   log_notebook.set_current_page(Some(log_notebook.n_pages() - 1));
                   buf
               };
