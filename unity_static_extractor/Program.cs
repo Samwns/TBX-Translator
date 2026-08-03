@@ -34,7 +34,7 @@ namespace unity_static_extractor
             }
             else if (mode == "inject")
             {
-                Inject(dataFolder, jsonFile);
+                Console.WriteLine("[C#] Direct asset injection is disabled with the UABEA reader. Use the XUnity/BepInEx injection flow.");
             }
             else
             {
@@ -157,9 +157,71 @@ namespace unity_static_extractor
             "m_ClassName", "m_Namespace", "m_AssemblyName",
         };
 
+        // Unity serializes both legacy UI.Text and TextMeshPro/TMP_Text as a
+        // MonoBehaviour. Their displayed value is m_Text (some custom UI
+        // components use text). Do not recursively collect every string: that
+        // turns configuration, class names and identifiers into translations.
+        private static readonly HashSet<string> _displayTextFieldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "m_Text", "text", "m_DisplayText", "m_TranslatedText",
+            "m_OriginalText", "m_LocalizedText", "m_Tooltip", "m_Description"
+        };
+        private static readonly HashSet<string> _textAssetJsonFieldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "text", "value", "localized", "translation", "translated",
+            "dialogue", "line"
+        };
+
+        static void ExtractJsonTextValues(JsonElement element, HashSet<string> results, bool acceptedField = false)
+        {
+            if (element.ValueKind == JsonValueKind.String)
+            {
+                var value = element.GetString() ?? "";
+                if (acceptedField && IsValidText(value)) results.Add(value);
+                return;
+            }
+            if (element.ValueKind == JsonValueKind.Object)
+                foreach (var property in element.EnumerateObject())
+                    ExtractJsonTextValues(property.Value, results, _textAssetJsonFieldNames.Contains(property.Name));
+            else if (element.ValueKind == JsonValueKind.Array)
+                foreach (var item in element.EnumerateArray())
+                    ExtractJsonTextValues(item, results, acceptedField);
+        }
+
+        static bool IsLikelyTextAsset(string name)
+        {
+            var lower = name.ToLowerInvariant();
+            return lower.Contains("dialog") || lower.Contains("localiz") ||
+                lower.Contains("string") || lower.Contains("subtitle") ||
+                lower.Contains("yarn") || lower.Contains("story") ||
+                lower.Contains("language") || lower.Contains("locale") ||
+                lower.Contains("text");
+        }
+
+        static void ExtractTextAsset(string name, string script, HashSet<string> results)
+        {
+            if (string.IsNullOrWhiteSpace(script)) return;
+            try
+            {
+                using var document = JsonDocument.Parse(script);
+                ExtractJsonTextValues(document.RootElement, results);
+                return;
+            }
+            catch (JsonException) { }
+
+            // A generic CSV/bytes TextAsset may be color/font/configuration
+            // data. Only use raw lines when its name indicates dialogue/text.
+            if (!IsLikelyTextAsset(name)) return;
+            foreach (var line in script.Split('\n'))
+            {
+                var trimmed = line.Trim();
+                if (!trimmed.StartsWith("\"") && IsValidText(trimmed)) results.Add(trimmed);
+            }
+        }
+
         /// <summary>
-        /// Recursively extracts all string values from a Unity asset field tree,
-        /// filtering through IsValidText to keep only translatable content.
+        /// Recursively extracts only fields with a known player-facing text
+        /// name. TextAsset is handled separately through m_Script.
         /// </summary>
         static void ExtractStringsFromField(AssetTypeValueField field, HashSet<string> results, int depth = 0)
         {
@@ -169,8 +231,7 @@ namespace unity_static_extractor
             if (field.Value != null && field.Value.ValueType == AssetValueType.String)
             {
                 string fieldName = field.FieldName ?? "";
-                // Skip known internal fields
-                if (!_internalFieldNames.Contains(fieldName))
+                if (_displayTextFieldNames.Contains(fieldName))
                 {
                     string val = field.AsString;
                     if (IsValidText(val)) results.Add(val);
@@ -189,41 +250,72 @@ namespace unity_static_extractor
             }
         }
 
+        // UABEA/AssetsTools.NET can open serialized files embedded in bundles.
+        // Keeping this in the native scanner means bundle support does not depend
+        // on Python; UnityPy below is an additional best-effort reader.
+        static void ExtractBundle(AssetsManager manager, string bundlePath, HashSet<string> allTexts)
+        {
+            try
+            {
+                var bundle = manager.LoadBundleFile(bundlePath, true);
+                int index = 0;
+                foreach (var entry in bundle.file.BlockAndDirInfo.DirectoryInfos)
+                {
+                    try
+                    {
+                        if (entry.Name.EndsWith(".resS", StringComparison.OrdinalIgnoreCase) ||
+                            entry.Name.EndsWith(".resource", StringComparison.OrdinalIgnoreCase))
+                        {
+                            index++;
+                            continue;
+                        }
+                        var inst = manager.LoadAssetsFileFromBundle(bundle, index, true);
+                        if (inst == null) { index++; continue; }
+                        manager.LoadClassDatabaseFromPackage(inst.file.Metadata.UnityVersion);
+                        foreach (var info in inst.file.GetAssetsOfType(114))
+                        {
+                            try
+                            {
+                                var field = manager.GetBaseField(inst, info);
+                                if (field != null) ExtractStringsFromField(field, allTexts);
+                            }
+                            catch { }
+                        }
+                        foreach (var info in inst.file.GetAssetsOfType(49))
+                        {
+                            try
+                            {
+                                var field = manager.GetBaseField(inst, info);
+                                var name = field?["m_Name"];
+                                var script = field?["m_Script"];
+                                if (script != null && !script.IsDummy && script.Value != null)
+                                    ExtractTextAsset(name?.AsString ?? "", script.AsString, allTexts);
+                            }
+                            catch { }
+                        }
+                    }
+                    catch { }
+                    index++;
+                }
+                bundle.file.Reader.Close();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[C#] Could not read bundle {Path.GetFileName(bundlePath)}: {ex.Message}");
+            }
+        }
+
 
         static void Extract(string dataFolder, string jsonFile)
         {
             Console.WriteLine($"[C#] EXTRACT mode started for: {dataFolder}");
             HashSet<string> allTexts = new HashSet<string>();
 
-            // DLL Extraction
-            Console.WriteLine("[C#] Extracting from Assembly-CSharp.dll...");
+            // Managed IL literals have no field/type metadata. Scanning every
+            // ldstr mixes exception messages, keys and code into translations,
+            // so strict mode intentionally limits itself to serialized assets.
+            Console.WriteLine("[C#] Strict mode: skipping Assembly-CSharp.dll literals.");
             string managedFolder = Path.Combine(dataFolder, "Managed");
-            if (Directory.Exists(managedFolder))
-            {
-                string asmPath = Path.Combine(managedFolder, "Assembly-CSharp.dll");
-                if (File.Exists(asmPath))
-                {
-                    try
-                    {
-                        var module = ModuleDefinition.ReadModule(asmPath);
-                        foreach (var type in module.Types)
-                        {
-                            foreach (var method in type.Methods)
-                            {
-                                if (!method.HasBody) continue;
-                                foreach (var instr in method.Body.Instructions)
-                                {
-                                    if (instr.OpCode == OpCodes.Ldstr && instr.Operand is string s)
-                                    {
-                                        if (IsValidText(s)) allTexts.Add(s);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex) { Console.WriteLine($"[C#] Error reading dll: {ex.Message}"); }
-                }
-            }
 
             Console.WriteLine("[C#] Extracting from .assets and .bundle files...");
             var manager = new AssetsManager();
@@ -285,14 +377,7 @@ namespace unity_static_extractor
                             var scriptF = baseField["m_Script"];
                             if (!scriptF.IsDummy && scriptF.Value != null) {
                                 string val = scriptF.AsString;
-                                if (!string.IsNullOrWhiteSpace(val) && val.Length > 2) {
-                                    // For TextAssets, extract individual lines if it looks like dialogue
-                                    foreach (string line in val.Split('\n'))
-                                    {
-                                        string trimmed = line.Trim();
-                                        if (IsValidText(trimmed)) allTexts.Add(trimmed);
-                                    }
-                                }
+                                ExtractTextAsset(assetName, val, allTexts);
                             }
                         }
                         catch { }
@@ -301,11 +386,34 @@ namespace unity_static_extractor
                 catch { }
             }
 
+            // This includes conventional bundles and Unity Addressables bundles.
+            // Addressables may be extensionless, so inspect extensionless files in
+            // StreamingAssets/aa as well.
+            var bundleExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                { ".bundle", ".unity3d", ".ab", ".assetbundle" };
+            var bundleFiles = Directory.GetFiles(dataFolder, "*", SearchOption.AllDirectories)
+                .Where(path =>
+                {
+                    var extension = Path.GetExtension(path);
+                    var normalized = path.Replace('\\', '/');
+                    return bundleExtensions.Contains(extension) ||
+                        (string.IsNullOrEmpty(extension) && normalized.IndexOf("/StreamingAssets/aa/", StringComparison.OrdinalIgnoreCase) >= 0);
+                });
+            foreach (var bundlePath in bundleFiles)
+            {
+                Console.WriteLine($"[C#] Scanning bundle: {Path.GetFileName(bundlePath)}");
+                ExtractBundle(manager, bundlePath, allTexts);
+            }
+
             var opts = new JsonSerializerOptions { WriteIndented = true, Encoder = JavaScriptEncoder.Create(UnicodeRanges.All) };
             File.WriteAllText(jsonFile, JsonSerializer.Serialize(allTexts.ToList(), opts));
             Console.WriteLine($"[C#] Extracted {allTexts.Count} strings to {jsonFile}");
         }
 
+        // This legacy writer targets the older AssetsTools.NET API. Keep its
+        // source available for a future UABEA-compatible rewrite, but do not
+        // compile it against UABEA's current reader/writer API.
+#if LEGACY_DIRECT_INJECTION
         static void Inject(string dataFolder, string jsonFile)
         {
             if (!File.Exists(jsonFile))
@@ -635,5 +743,6 @@ namespace unity_static_extractor
 
             Console.WriteLine("[C#] Injection finished!");
         }
+#endif
     }
 }

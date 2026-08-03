@@ -46,6 +46,59 @@ pub fn output_folder(executable: &str, target_lang_name: &str) -> PathBuf {
     parent.join(format!("TBX_Workspace_{}", target_lang_name))
 }
 
+/// UnityPy complements AssetsTools.NET/UABEA for bundles and Addressables which
+/// are not always discoverable as a normal `.assets` file. It is optional so a
+/// packaged application remains usable without a Python runtime.
+fn extract_with_unitypy(
+    data_dir: &Path,
+    extractor_dir: &Path,
+    output_json: &Path,
+    tx: &gtk4::glib::Sender<UiMsg>,
+) -> Result<Option<Vec<String>>, String> {
+    let script = extractor_dir.join("unitypy_extract.py");
+    if !script.is_file() {
+        return Ok(None);
+    }
+
+    let python = if cfg!(windows) { "python" } else { "python3" };
+    let unitypy_checkout = extractor_dir
+        .parent()
+        .map(|root| root.join("third_party").join("UnityPy"));
+    let mut command = Command::new(python);
+    command.arg(&script).arg(data_dir).arg(output_json);
+    // A local checkout wins over a globally installed UnityPy. Python keeps its
+    // normal dependency resolution, so a missing dependency is reported in the
+    // existing non-fatal fallback message.
+    if let Some(checkout) = unitypy_checkout.filter(|path| path.is_dir()) {
+        let mut paths = vec![checkout];
+        if let Some(existing) = std::env::var_os("PYTHONPATH") {
+            paths.extend(std::env::split_paths(&existing));
+        }
+        if let Ok(joined) = std::env::join_paths(paths) {
+            command.env("PYTHONPATH", joined);
+        }
+    }
+    let output = match command.output() {
+        Ok(output) => output,
+        Err(_) => {
+            let _ = tx.send(UiMsg::Log("[UnityPy] Python não encontrado; continuando com AssetsTools.NET.".into()));
+            return Ok(None);
+        }
+    };
+
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let _ = tx.send(UiMsg::Log(line.to_owned()));
+    }
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        let _ = tx.send(UiMsg::Log(format!("[UnityPy] Indisponível ({}); continuando com AssetsTools.NET.", detail)));
+        return Ok(None);
+    }
+    let content = fs::read_to_string(output_json).map_err(|e| format!("Erro lendo saída do UnityPy: {e}"))?;
+    let texts = serde_json::from_str(&content).map_err(|e| format!("JSON inválido do UnityPy: {e}"))?;
+    Ok(Some(texts))
+}
+
 pub async fn extract_texts(
     executable: &str,
     _translation_folder: &str,
@@ -74,6 +127,7 @@ pub async fn extract_texts(
     let _ = fs::create_dir_all(&out_dir);
 
     let extracted_json = out_dir.join("extracted_texts.json");
+    let unitypy_json = out_dir.join("unitypy_texts.json");
     let translated_json = out_dir.join("translated_texts.json");
     
     let _ = tx.send(UiMsg::Log(format!("[Unity] Chamando extrator C# (modo extract)...")));
@@ -113,7 +167,19 @@ pub async fn extract_texts(
     }
     
     let json_content = fs::read_to_string(&extracted_json).map_err(|e| e.to_string())?;
-    let texts: Vec<String> = serde_json::from_str(&json_content).map_err(|e| format!("Erro ao ler JSON: {}", e))?;
+    let mut texts: Vec<String> = serde_json::from_str(&json_content).map_err(|e| format!("Erro ao ler JSON: {}", e))?;
+
+    let _ = tx.send(UiMsg::Log("[Unity] Complementando bundles/Addressables com UnityPy...".into()));
+    if let Some(unitypy_texts) = extract_with_unitypy(&data_dir, &extractor_dir, &unitypy_json, &tx)? {
+        let before = texts.len();
+        let mut unique: std::collections::HashSet<String> = texts.into_iter().collect();
+        unique.extend(unitypy_texts);
+        texts = unique.into_iter().collect();
+        texts.sort_unstable();
+        fs::write(&extracted_json, serde_json::to_string_pretty(&texts).map_err(|e| e.to_string())?)
+            .map_err(|e| format!("Erro atualizando JSON consolidado: {e}"))?;
+        let _ = tx.send(UiMsg::Log(format!("[Unity] UnityPy adicionou {} textos únicos.", texts.len() - before)));
+    }
     
     if texts.is_empty() {
         return Err("Nenhum texto encontrado para traduzir.".into());

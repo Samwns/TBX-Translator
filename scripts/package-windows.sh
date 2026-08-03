@@ -44,6 +44,9 @@ dotnet.exe publish unity_static_extractor/unity_static_extractor.csproj \
     --configuration Release --runtime win-x64 --self-contained true \
     --output "$STAGE_DIR/unity_static_extractor"
 cp -a assets BepInEx XUnity_AutoTranslator_bepInEx "$STAGE_DIR/"
+mkdir -p "$STAGE_DIR/third_party/UnityPy"
+cp -a third_party/UnityPy/UnityPy "$STAGE_DIR/third_party/UnityPy/"
+cp unity_static_extractor/unitypy_extract.py "$STAGE_DIR/unity_static_extractor/"
 cp /mingw64/bin/*.dll "$STAGE_DIR/"
 cp README.md LICENSE "$STAGE_DIR/"
 

@@ -42,6 +42,9 @@ dotnet publish unity_static_extractor/unity_static_extractor.csproj \
     --configuration Release --runtime linux-x64 --self-contained true \
     --output "$APP_DIR/unity_static_extractor"
 cp -a assets BepInEx XUnity_AutoTranslator_bepInEx "$APP_DIR/"
+mkdir -p "$APP_DIR/third_party/UnityPy"
+cp -a third_party/UnityPy/UnityPy "$APP_DIR/third_party/UnityPy/"
+cp unity_static_extractor/unitypy_extract.py "$APP_DIR/unity_static_extractor/"
 cp README.md LICENSE "$APP_DIR/"
 
 echo "==> Montando pacotes nativos"

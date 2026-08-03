@@ -23,7 +23,8 @@ automatizar a localização de jogos. Ela extrai textos, traduz via Google
 Translate, permite a revisão manual e prepara a injeção no jogo.
 
 - Extração e geração de traduções para jogos Ren'Py
-- Extração de textos Unity Mono e IL2CPP com AssetsTools.NET
+- Extração de textos Unity Mono e IL2CPP com AssetsTools.NET (base do UABEA)
+  e complemento opcional UnityPy para AssetBundles e Addressables
 - Integração com BepInEx e XUnity AutoTranslator para Unity
 - Editor visual para revisar arquivos `.rpy`, `.txt` e `.json`
 - Proteção de variáveis, tags e formatação durante a tradução
@@ -44,6 +45,9 @@ sudo apt install libgtk-4-dev dotnet-sdk-8.0
 
 cargo run
 ```
+
+O código-fonte do UnityPy é distribuído em `third_party/UnityPy` e é usado
+diretamente pelo scanner complementar de AssetBundles/Addressables.
 
 Para uma compilação otimizada:
 
@@ -103,7 +107,8 @@ game localization. It extracts text, translates it through Google Translate,
 allows manual review, and prepares the translation for injection into the game.
 
 - Text extraction and translation generation for Ren'Py games
-- Unity Mono and IL2CPP text extraction using AssetsTools.NET
+- Unity Mono and IL2CPP text extraction using AssetsTools.NET (the UABEA base)
+  plus optional UnityPy support for AssetBundles and Addressables
 - BepInEx and XUnity AutoTranslator integration for Unity
 - Visual editor for reviewing `.rpy`, `.txt`, and `.json` files
 - Variable, tag, and formatting protection during translation
@@ -130,6 +135,9 @@ For an optimized build:
 ```bash
 cargo build --release
 ```
+
+UnityPy's source is included in `third_party/UnityPy` and is used directly for
+the additional AssetBundle/Addressables scan.
 
 ## Linux and Windows releases
 

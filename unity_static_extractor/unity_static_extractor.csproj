@@ -7,10 +7,20 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- UABEA ships its tested AssetsTools.NET binaries.  Referencing them
+       directly keeps the scanner aligned with the UABEA reader/writer instead
+       of an independently resolved NuGet version. -->
   <ItemGroup>
-    <PackageReference Include="AssetsTools.NET" Version="3.0.5" />
-    <PackageReference Include="AssetsTools.NET.MonoCecil" Version="3.0.4" />
-    <PackageReference Include="Mono.Cecil" Version="0.11.6" />
+    <Reference Include="AssetsTools.NET">
+      <HintPath>../third_party/UABEA/Libs/AssetsTools.NET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="AssetsTools.NET.MonoCecil">
+      <HintPath>../third_party/UABEA/Libs/AssetsTools.NET.MonoCecil.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <!-- UABEA references Mono.Cecil from NuGet rather than shipping it in Libs. -->
+    <PackageReference Include="Mono.Cecil" Version="0.11.4" />
   </ItemGroup>
 
   <ItemGroup>

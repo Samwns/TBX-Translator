@@ -1,0 +1,6 @@
+[submodule "third_party/UABEA"]
+	path = third_party/UABEA
+	url = https://github.com/nesrak1/UABEA.git
+[submodule "third_party/UnityPy"]
+	path = third_party/UnityPy
+	url = https://github.com/K0lb3/UnityPy.git
