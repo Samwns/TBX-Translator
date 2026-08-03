@@ -12,11 +12,12 @@ use gtk4::{
     TextBuffer, TextView, ToggleButton, CheckButton, MessageDialog, MessageType,
     ButtonsType, ResponseType, DialogFlags, CssProvider, Image
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::path::Path;
+use std::time::Duration;
 
 use crate::app_config::AppConfig;
 
@@ -26,6 +27,40 @@ const IDIOMAS: &[&str] = &[
     "Espanhol","Francês","Inglês","Italiano",
     "Japonês","Português","Russo",
 ];
+
+/// Read-only detection performed outside GTK's main loop. The selected path can
+/// be either a game executable/script or a Unity *_Data directory.
+fn detect_game_type(path: &str) -> String {
+    let selected = Path::new(path);
+    if path.trim().is_empty() {
+        return "Nenhum jogo selecionado".into();
+    }
+
+    let is_renpy = selected.extension().map(|ext| ext.eq_ignore_ascii_case("py")).unwrap_or(false)
+        || selected.parent().map(|parent| parent.join("game").is_dir()).unwrap_or(false)
+        || (selected.is_dir() && selected.join("game").is_dir());
+    if is_renpy {
+        return "Ren'Py detectado".into();
+    }
+
+    let unity_data = selected.is_dir()
+        && selected.file_name().map(|name| name.to_string_lossy().ends_with("_Data")).unwrap_or(false);
+    if unity_data {
+        let backend = if selected.join("Managed").join("Assembly-CSharp.dll").is_file() {
+            "Mono"
+        } else if selected.join("il2cpp_data").is_dir() {
+            "IL2CPP"
+        } else {
+            "Unity"
+        };
+        return format!("Unity detectado ({backend})");
+    }
+
+    if let Some(backend) = crate::unity_extractor::detect_unity_backend(path) {
+        return format!("Unity detectado ({backend})");
+    }
+    "Jogo não identificado".into()
+}
 
 // ── CSS — exact colors from style.css + GTK4 animations ────────────
 const CSS: &str = "
@@ -225,9 +260,7 @@ combobox button:hover { background-color: #3d3f55; }
     box-shadow: 0 4px 18px rgba(249,226,175,0.4);
 }
 .btn-translate-renpy label {
-    color: #ffffff;
-    text-shadow: -1px -1px 0 #11111b, 1px -1px 0 #11111b,
-                 -1px 1px 0 #11111b, 1px 1px 0 #11111b;
+    color: #11111b;
 }
 
 .btn-translate-unity {
@@ -247,9 +280,7 @@ combobox button:hover { background-color: #3d3f55; }
     box-shadow: 0 4px 18px rgba(137,180,250,0.4);
 }
 .btn-translate-unity label {
-    color: #ffffff;
-    text-shadow: -1px -1px 0 #11111b, 1px -1px 0 #11111b,
-                 -1px 1px 0 #11111b, 1px 1px 0 #11111b;
+    color: #11111b;
 }
 
 .btn-editor {
@@ -264,9 +295,7 @@ combobox button:hover { background-color: #3d3f55; }
 }
 .btn-editor:hover { background-color: #74c7ec; }
 .btn-editor label {
-    color: #ffffff;
-    text-shadow: -1px -1px 0 #11111b, 1px -1px 0 #11111b,
-                 -1px 1px 0 #11111b, 1px 1px 0 #11111b;
+    color: #11111b;
 }
 
 .btn-browse {
@@ -425,6 +454,27 @@ separator { background-color: #313244; min-height: 1px; }
 .page-settings  { animation: slidein 300ms ease-out both; }
 ";
 
+// Keep the colour-critical controls in a small, conservative stylesheet too.
+// The Windows GTK theme can supply a `background-image` for buttons; that
+// image is painted over `background-color` and made the actions look grey.
+// This intentionally avoids animation/filter/text-shadow rules so it works
+// with the older GTK runtime commonly bundled on Windows.
+const WINDOWS_BUTTON_CSS: &str = "
+button { background-image: none; color: #ffffff; }
+button.btn-translate-renpy { background-image: none; background-color: #f9e2af; color: #11111b; border-color: #f9e2af; }
+button.btn-translate-unity, button.btn-editor { background-image: none; background-color: #89b4fa; color: #11111b; border-color: #89b4fa; }
+button.btn-save-config { background-image: none; background-color: #a6e3a1; color: #11111b; border-color: #a6e3a1; }
+button.btn-cancel { background-image: none; background-color: #f38ba8; color: #11111b; border-color: #f38ba8; }
+button.btn-browse { background-image: none; background-color: #313244; color: #cba6f7; border-color: #585b70; }
+button.btn-translate-renpy label, button.btn-translate-unity label, button.btn-editor label,
+button.btn-save-config label, button.btn-cancel label { color: #11111b; }
+button.btn-browse label { color: #cba6f7; }
+button.switch-toggle { background-image: none; }
+button.switch-toggle label { color: #ffffff; }
+button.switch-toggle:checked label { color: #11111b; }
+.font-btn-glyph { color: #11111b; font-weight: bold; font-size: 18px; }
+";
+
 // ── Message enum ────────────────────────────────────────────────────
 #[derive(Debug, Clone)]
 pub enum UiMsg {
@@ -487,6 +537,13 @@ pub fn build_ui(app: &Application) {
         &gtk::gdk::Display::default().expect("no display"),
         &provider,
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
+    let windows_button_provider = CssProvider::new();
+    windows_button_provider.load_from_data(WINDOWS_BUTTON_CSS);
+    gtk::style_context_add_provider_for_display(
+        &gtk::gdk::Display::default().expect("no display"),
+        &windows_button_provider,
+        gtk::STYLE_PROVIDER_PRIORITY_USER,
     );
 
     let cfg = AppConfig::carregar();
@@ -690,21 +747,85 @@ pub fn build_ui(app: &Application) {
     det_muted.add_css_class("muted-label");
     let detected_lbl = Label::new(Some("None"));
     detected_lbl.add_css_class("detected-label");
-    
-    // Auto-detect on startup based on config
-    let init_path = path_entry.text().to_string();
-    if !init_path.is_empty() {
-        let low = init_path.to_lowercase();
-        if low.ends_with(".py") || Path::new(&init_path).parent().map(|p| p.join("game").is_dir()).unwrap_or(false) {
-            detected_lbl.set_text("Ren'Py");
-        } else if low.ends_with(".exe") {
-            let backend = crate::unity_extractor::detect_unity_backend(&init_path).unwrap_or("Desconhecido");
-            detected_lbl.set_text(&format!("Unity ({})", backend));
-        }
-    }
-    
     det_row.append(&det_muted); det_row.append(&detected_lbl);
     page_translate.append(&det_row);
+
+    // Live game analysis feedback. The filesystem probe runs on a worker so
+    // selecting a large Unity installation never freezes the GTK window.
+    let analysis_row = Box::new(Orientation::Horizontal, 8);
+    analysis_row.set_halign(gtk::Align::Start);
+    let analysis_label = Label::new(Some("Analisando jogo…"));
+    analysis_label.add_css_class("muted-label");
+    let analysis_bar = ProgressBar::new();
+    analysis_bar.set_size_request(220, 12);
+    analysis_bar.set_show_text(false);
+    analysis_row.append(&analysis_label);
+    analysis_row.append(&analysis_bar);
+    analysis_row.set_visible(false);
+    page_translate.append(&analysis_row);
+
+    let detection_generation = Rc::new(Cell::new(0_u64));
+    let detect_current_game: Rc<dyn Fn()> = Rc::new({
+        let path_entry = path_entry.clone();
+        let detected_lbl = detected_lbl.clone();
+        let analysis_row = analysis_row.clone();
+        let analysis_label = analysis_label.clone();
+        let analysis_bar = analysis_bar.clone();
+        let detection_generation = detection_generation.clone();
+        move || {
+            let generation = detection_generation.get().wrapping_add(1);
+            detection_generation.set(generation);
+            let path = path_entry.text().to_string();
+            if path.trim().is_empty() {
+                analysis_row.set_visible(false);
+                detected_lbl.set_text("Nenhum jogo selecionado");
+                return;
+            }
+
+            detected_lbl.set_text("Analisando…");
+            analysis_label.set_text("Analisando jogo…");
+            analysis_bar.set_fraction(0.0);
+            analysis_bar.pulse();
+            analysis_row.set_visible(true);
+
+            #[allow(deprecated)]
+            let (tx, rx) = gtk::glib::MainContext::channel(gtk::glib::Priority::DEFAULT);
+            std::thread::spawn(move || {
+                let _ = tx.send(detect_game_type(&path));
+            });
+
+            let pulse_bar = analysis_bar.clone();
+            let pulse_generation = detection_generation.clone();
+            gtk::glib::timeout_add_local(Duration::from_millis(100), move || {
+                if pulse_generation.get() != generation {
+                    return gtk::glib::ControlFlow::Break;
+                }
+                pulse_bar.pulse();
+                gtk::glib::ControlFlow::Continue
+            });
+
+            let result_label = detected_lbl.clone();
+            let result_row = analysis_row.clone();
+            let result_status = analysis_label.clone();
+            let result_bar = analysis_bar.clone();
+            let result_generation = detection_generation.clone();
+            rx.attach(None, move |result| {
+                if result_generation.get() == generation {
+                    result_label.set_text(&result);
+                    result_status.set_text("Análise concluída");
+                    result_bar.set_fraction(1.0);
+                    result_row.set_visible(false);
+                }
+                gtk::glib::ControlFlow::Break
+            });
+        }
+    });
+
+    {
+        let detect_current_game = detect_current_game.clone();
+        path_entry.connect_changed(move |_| detect_current_game());
+    }
+    detect_current_game();
 
     // Language + folder row
     let lang_row = Box::new(Orientation::Horizontal, 10);
@@ -1001,29 +1122,14 @@ pub fn build_ui(app: &Application) {
     let box_font = Box::new(Orientation::Horizontal, 10);
     box_font.set_halign(gtk::Align::Center);
     box_font.set_valign(gtk::Align::Center);
-    let img_font = Image::from_file("assets/font_icon.svg");
-    img_font.set_pixel_size(18);
-    img_font.add_css_class("font-btn-icon-outline");
-    
-    let css_icon = "
-        .font-btn-icon-outline {
-            filter: drop-shadow(1px 1px 0px rgba(0,0,0,1)) drop-shadow(-1px -1px 0px rgba(0,0,0,1));
-        }
-        .font-pic-outline {
-            filter: drop-shadow(1px 1px 0px rgba(0,0,0,1)) drop-shadow(-1px -1px 0px rgba(0,0,0,1)) drop-shadow(1px -1px 0px rgba(0,0,0,1)) drop-shadow(-1px 1px 0px rgba(0,0,0,1));
-        }
-    ";
-    let provider = gtk::CssProvider::new();
-    provider.load_from_data(css_icon);
-    gtk::style_context_add_provider_for_display(
-        &gtk::gdk::Display::default().unwrap(),
-        &provider,
-        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION
-    );
+    // SVG filter effects render as black artefacts in the Windows GTK build.
+    // A plain glyph is sharper, does not depend on the current directory and
+    // remains legible on the green action button.
+    let font_glyph = Label::new(Some("Aa"));
+    font_glyph.add_css_class("font-btn-glyph");
     
     let lbl_font = Label::new(Some(&t("btn_font")));
-    lbl_font.add_css_class("font-btn-icon-outline");
-    box_font.append(&img_font);
+    box_font.append(&font_glyph);
     box_font.append(&lbl_font);
     btn_font_tool.set_child(Some(&box_font));
     
@@ -1077,6 +1183,7 @@ pub fn build_ui(app: &Application) {
         let lbl_pasta = lbl_pasta_clone.clone();
         let btn_inject = btn_inject.clone();
         let chk_renpy_inject = chk_renpy_inject.clone();
+        let detect_current_game = detect_current_game.clone();
         btn_renpy_tab.connect_clicked(move |btn| {
             if *em.borrow() == 1 {
                 let mut c = cfg_r.borrow_mut();
@@ -1094,6 +1201,7 @@ pub fn build_ui(app: &Application) {
             pasta_entry.set_sensitive(true);
             lbl_pasta.set_sensitive(true);
             tl.remove_css_class("unity-mode"); al.remove_css_class("unity-mode");
+            detect_current_game();
         });
     }
     {
@@ -1106,6 +1214,7 @@ pub fn build_ui(app: &Application) {
         let pasta_entry = pasta_entry.clone();
         let lbl_pasta = lbl_pasta_clone.clone();
         let btn_inject = btn_inject.clone();
+        let detect_current_game = detect_current_game.clone();
         btn_unity_tab.connect_clicked(move |btn| {
             if *em.borrow() == 0 {
                 let mut c = cfg_r.borrow_mut();
@@ -1119,9 +1228,10 @@ pub fn build_ui(app: &Application) {
             bt.set_label("EXTRAIR TEXTOS UNITY");
             btn_inject.remove_css_class("btn-translate-renpy"); btn_inject.add_css_class("btn-translate-unity");
             btn_inject.set_visible(true); // Always visible in Unity
-            pasta_entry.set_sensitive(false);
-            lbl_pasta.set_sensitive(false);
+            pasta_entry.set_sensitive(true);
+            lbl_pasta.set_sensitive(true);
             tl.add_css_class("unity-mode"); al.add_css_class("unity-mode");
+            detect_current_game();
         });
     }
     
@@ -1150,26 +1260,18 @@ pub fn build_ui(app: &Application) {
     tg_tradnomes.connect_toggled(|btn| btn.set_label(if btn.is_active() { "ON" } else { "OFF" }));
 
     // File picker
-    { let pe = path_entry.clone(); let dl = detected_lbl.clone(); let wc = window.clone();
+    { let pe = path_entry.clone(); let wc = window.clone();
       btn_browse.connect_clicked(move |_| {
           let dialog = gtk::FileChooserNative::new(
               Some("Selecionar Executável"), Some(&wc),
               gtk::FileChooserAction::Open, Some("Abrir"), Some("Cancelar"),
           );
-          let pe2 = pe.clone(); let dl2 = dl.clone();
+          let pe2 = pe.clone();
           dialog.connect_response(move |d, resp| {
               if resp == gtk::ResponseType::Accept {
                   if let Some(f) = d.file().and_then(|f| f.path()) {
                       let s = f.to_string_lossy().to_string();
                       pe2.set_text(&s);
-                      let has_game = f.parent().map(|p| p.join("game").is_dir()).unwrap_or(false);
-                      let low = s.to_lowercase();
-                      if has_game || low.ends_with(".py") { dl2.set_text("Ren'Py"); }
-                      else if low.ends_with(".exe") { 
-                          let backend = crate::unity_extractor::detect_unity_backend(&s).unwrap_or("Desconhecido");
-                          dl2.set_text(&format!("Unity ({})", backend)); 
-                      }
-                      else { dl2.set_text("Não identificado"); }
                   }
               }
           });
@@ -1241,7 +1343,7 @@ pub fn build_ui(app: &Application) {
                   let target_dir = if is_renpy {
                       parent.join("game").join("tl").join(&pasta_str)
                   } else {
-                      crate::unity_extractor::output_folder(exe.to_str().unwrap_or(""), &alvo)
+                      crate::unity_extractor::output_folder(exe.to_str().unwrap_or(""), &pasta_str, &alvo)
                   };
                   crate::editor_ui::show_editor(&app_clone, target_dir);
               }
@@ -1285,7 +1387,7 @@ pub fn build_ui(app: &Application) {
           let out_dir = if is_renpy {
               std::path::Path::new(&exe).parent().unwrap_or(std::path::Path::new(".")).join("game/tl").join(&pasta)
           } else {
-              crate::unity_extractor::output_folder(&exe, &alvo)
+              crate::unity_extractor::output_folder(&exe, &pasta, &alvo)
           };
           
           let game_name = Path::new(&exe).file_name().unwrap_or_default().to_string_lossy().to_string();
@@ -1430,6 +1532,7 @@ pub fn build_ui(app: &Application) {
 
       {
           let pe = path_entry.clone();
+          let pa = pasta_entry.clone();
           let a_stack = action_stack.clone();
           let pb = progress_bar.clone();
           let pl = progress_lbl.clone();
@@ -1452,6 +1555,7 @@ pub fn build_ui(app: &Application) {
                   return;
               }
               let is_renpy = *em.borrow() == 0;
+              let pasta = pa.text().to_string();
               let alvo = combo_alvo.active_text().unwrap_or_else(|| "pt".into()).to_string();
               let game_name = Path::new(&exe).file_name().unwrap_or_default().to_string_lossy().to_string();
               
@@ -1505,7 +1609,7 @@ pub fn build_ui(app: &Application) {
                       let res = if is_renpy {
                           Err("Injeção manual separada para Ren'Py ainda não implementada. Use 'Iniciar Tradução'.".into())
                       } else {
-                          crate::unity_extractor::inject_texts(&exe, "", &alvo, tx.clone()).await
+                          crate::unity_extractor::inject_texts(&exe, &pasta, &alvo, tx.clone()).await
                       };
                       let _ = tx.send(UiMsg::Done(match res {
                           Ok(_) => "✅ Operação concluída com sucesso!".into(),

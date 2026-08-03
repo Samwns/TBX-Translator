@@ -154,7 +154,8 @@ pub fn show_font_window(parent: &gtk::ApplicationWindow, game_path: String, engi
                 match fonts {
                     Ok(f_list) => {
                         if f_list.is_empty() {
-                            let lbl = Label::new(Some("Nenhuma fonte encontrada."));
+                            let lbl = Label::new(Some("Nenhuma fonte TTF/OTF embutida encontrada. Fontes TextMeshPro (SDF) não podem receber um .ttf diretamente; use a fonte original ou um asset bundle TMP."));
+                            lbl.set_wrap(true);
                             lbl.set_margin_top(10); lbl.set_margin_bottom(10);
                             list_fonts_inner.append(&lbl);
                         } else {
@@ -595,28 +596,133 @@ fn inject_renpy_individual(game_path_str: &str, user_font_path: &Path, target_in
     Ok(())
 }
 
+fn append_font_preview(container: &Box, font_path: &Path) -> Result<(), String> {
+    let font_data = fs::read(font_path).map_err(|e| format!("Falha ao ler a fonte: {e}"))?;
+    if Font::try_from_vec(font_data.clone()).is_none() {
+        return Err("A fonte extraída não é um TTF/OTF compatível com a prévia.".into());
+    }
+    let entry = Entry::new();
+    entry.set_placeholder_text(Some("Digite para testar a fonte..."));
+    entry.set_hexpand(true);
+    let picture = Picture::new();
+    picture.set_halign(gtk::Align::Start);
+    picture.set_margin_top(5);
+    picture.add_css_class("font-pic-outline");
+    let picture_for_change = picture.clone();
+    entry.connect_changed(move |entry| {
+        let Some(font) = Font::try_from_vec(font_data.clone()) else { return; };
+        let text = entry.text();
+        if text.is_empty() { picture_for_change.set_paintable(None::<&gtk::gdk::Paintable>); return; }
+        let scale = Scale::uniform(30.0);
+        let metrics = font.v_metrics(scale);
+        let glyphs: Vec<_> = font.layout(&text, scale, point(0.0, metrics.ascent)).collect();
+        let width = glyphs.iter().map(|g| g.position().x + g.unpositioned().h_metrics().advance_width)
+            .last().unwrap_or(1.0).ceil().max(1.0) as u32;
+        let height = (metrics.ascent - metrics.descent).ceil().max(1.0) as u32;
+        let mut pixels = vec![0u8; (width * height * 4) as usize];
+        for glyph in glyphs {
+            if let Some(bb) = glyph.pixel_bounding_box() {
+                glyph.draw(|x, y, value| {
+                    let px = x as i32 + bb.min.x;
+                    let py = y as i32 + bb.min.y;
+                    if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
+                        let i = ((py * width as i32 + px) * 4) as usize;
+                        pixels[i] = 255; pixels[i + 1] = 255; pixels[i + 2] = 255;
+                        pixels[i + 3] = pixels[i + 3].max((value * 255.0) as u8);
+                    }
+                });
+            }
+        }
+        let bytes = gtk::glib::Bytes::from(&pixels);
+        let texture = gtk::gdk::MemoryTexture::new(width as i32, height as i32,
+            gtk::gdk::MemoryFormat::R8g8b8a8, &bytes, (width * 4) as usize);
+        picture_for_change.set_paintable(Some(&texture));
+        picture_for_change.set_size_request(width as i32, height as i32);
+    });
+    entry.set_text("Prévia da fonte Unity: Áá Çç 123");
+    container.append(&entry);
+    container.append(&picture);
+    Ok(())
+}
+
 fn create_font_row_unity(font_id: &str, game_path: &str, parent_win: &ApplicationWindow) -> ListBoxRow {
     let row = ListBoxRow::new();
     let bx_v = Box::new(Orientation::Vertical, 5);
     bx_v.set_margin_top(8); bx_v.set_margin_bottom(8);
     bx_v.set_margin_start(10); bx_v.set_margin_end(10);
 
-    let lbl = Label::new(Some(font_id));
+    let font_parts = font_id
+        .splitn(4, '|')
+        .collect::<Vec<_>>();
+    let is_embedded = font_parts.len() == 4 && font_parts[0] == "EMBEDDED";
+    let display_name = if font_parts.len() == 4 {
+        let kind = if is_embedded { "TTF/OTF incorporada" } else { "TextMeshPro/SDF" };
+        format!("{}  —  {} ({})", font_parts[2], font_parts[1], kind)
+    } else {
+        font_id.to_string()
+    };
+    let lbl = Label::new(Some(&display_name));
     lbl.set_hexpand(true);
     lbl.set_halign(gtk::Align::Start);
     
+    let btn_extract = Button::with_label("Extrair original");
     let btn_replace = Button::with_label("Substituir");
+    if !is_embedded {
+        btn_extract.set_sensitive(false);
+        btn_replace.set_sensitive(false);
+        btn_extract.set_tooltip_text(Some("Fontes TMP/SDF usam atlas; não possuem um TTF/OTF extraível."));
+        btn_replace.set_tooltip_text(Some("Para trocar TMP/SDF é necessário um asset bundle TMP compatível."));
+    }
     
     let bx_h = Box::new(Orientation::Horizontal, 10);
     bx_h.append(&lbl);
+    bx_h.append(&btn_extract);
     bx_h.append(&btn_replace);
     bx_v.append(&bx_h);
 
-    row.set_child(Some(&bx_v));
-
-    let f_path = font_id.to_string();
+    let f_path = if is_embedded {
+        format!("{}|{}|{}", font_parts[1], font_parts[2], font_parts[3])
+    } else { String::new() };
     let gp = game_path.to_string();
     let win_inner = parent_win.clone();
+
+    if is_embedded {
+        match export_unity_original_font(&gp, &f_path).and_then(|path| {
+            append_font_preview(&bx_v, &path).map(|_| path)
+        }) {
+            Ok(_) => {}
+            Err(error) => {
+                let status = Label::new(Some(&format!("Prévia indisponível: {error}")));
+                status.add_css_class("muted-label");
+                status.set_halign(gtk::Align::Start);
+                bx_v.append(&status);
+            }
+        }
+    } else {
+        let status = Label::new(Some("Fonte TMP/SDF detectada. A prévia do atlas não pode ser convertida com segurança para TTF/OTF."));
+        status.add_css_class("muted-label");
+        status.set_wrap(true);
+        status.set_halign(gtk::Align::Start);
+        bx_v.append(&status);
+    }
+
+    row.set_child(Some(&bx_v));
+
+    let export_path = f_path.clone();
+    let export_game = gp.clone();
+    let export_window = win_inner.clone();
+    btn_extract.connect_clicked(move |_| {
+        let result = export_unity_original_font(&export_game, &export_path);
+        let (kind, text) = match result {
+            Ok(path) => (gtk::MessageType::Info, format!("Fonte original extraída em:\n{}", path.display())),
+            Err(error) => (gtk::MessageType::Error, error),
+        };
+        let dialog = gtk::MessageDialog::new(
+            Some(&export_window), gtk::DialogFlags::MODAL, kind, gtk::ButtonsType::Ok, &text,
+        );
+        dialog.connect_response(|d, _| d.destroy());
+        dialog.show();
+    });
     
     btn_replace.connect_clicked(move |_| {
         let dialog = FileChooserNative::new(
@@ -692,13 +798,18 @@ fn scan_unity_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
         .output()
         .map_err(|e| format!("Falha ao chamar C#: {}", e))?;
         
+    if !out.status.success() {
+        return Err(format!("Extrator UABEA falhou: {}", String::from_utf8_lossy(&out.stderr).trim()));
+    }
     let txt = String::from_utf8_lossy(&out.stdout);
     let mut fonts = Vec::new();
     for line in txt.lines() {
         if line.starts_with("[FONT_SCAN] ") {
-            let parts: Vec<&str> = line["[FONT_SCAN] ".len()..].split('|').collect();
-            if parts.len() == 2 {
-                fonts.push(format!("{}|{}", parts[0], parts[1]));
+            // UABEA gives us a stable locator: asset path, asset name and
+            // path ID.  The ID prevents replacing a similarly named font.
+            let parts: Vec<&str> = line["[FONT_SCAN] ".len()..].splitn(4, '|').collect();
+            if parts.len() == 4 && matches!(parts[0], "EMBEDDED" | "TMP") {
+                fonts.push(format!("{}|{}|{}|{}", parts[0], parts[1], parts[2], parts[3]));
             }
         }
     }
@@ -707,12 +818,14 @@ fn scan_unity_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
 }
 
 fn inject_unity_individual(game_path_str: &str, user_font_path: &Path, target_internal_path: &str) -> Result<(), String> {
-    let parts: Vec<&str> = target_internal_path.split('|').collect();
-    if parts.len() != 2 {
+    let parts: Vec<&str> = target_internal_path.splitn(3, '|').collect();
+    if parts.len() != 3 {
         return Err("Formato de fonte Unity inválido.".to_string());
     }
     let asset_file = parts[0];
     let font_name = parts[1];
+    let path_id = parts[2];
+    let font_locator = format!("{}|{}", asset_file, path_id);
     
     let mut base_dir = PathBuf::from(game_path_str);
     if base_dir.is_file() {
@@ -734,7 +847,7 @@ fn inject_unity_individual(game_path_str: &str, user_font_path: &Path, target_in
     let out = command
         .arg("font-inject")
         .arg(&base_dir.to_string_lossy().to_string())
-        .arg(asset_file)
+        .arg(font_locator)
         .arg(font_name)
         .arg(&user_font_path.to_string_lossy().to_string())
         .current_dir(&script_path)
@@ -747,4 +860,39 @@ fn inject_unity_individual(game_path_str: &str, user_font_path: &Path, target_in
     } else {
         Err(format!("Falha na injeção C#:\n{}", txt))
     }
+}
+
+fn export_unity_original_font(game_path_str: &str, target_internal_path: &str) -> Result<PathBuf, String> {
+    let parts: Vec<&str> = target_internal_path.splitn(3, '|').collect();
+    if parts.len() != 3 {
+        return Err("Formato de fonte Unity inválido.".to_string());
+    }
+    let mut base_dir = PathBuf::from(game_path_str);
+    if base_dir.is_file() {
+        base_dir = base_dir.parent().ok_or("Pasta do jogo inválida.")?.to_path_buf();
+    }
+    // Same lifecycle as the Ren'Py preview: UABEA exports the original font
+    // once into a game-local temporary directory, then the UI reads that file
+    // for both preview and later manual export/replacement.
+    let output_dir = base_dir.join("tpg_temp_fonts");
+    let locator = format!("{}|{}", parts[0], parts[2]);
+    let script_path = crate::paths::app_root().join("unity_static_extractor");
+    let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
+    let mut command = if packaged.is_file() {
+        std::process::Command::new(packaged)
+    } else {
+        let mut command = std::process::Command::new("dotnet");
+        command.arg("run").arg("--");
+        command
+    };
+    let out = command
+        .arg("font-export").arg(&base_dir).arg(locator).arg(&output_dir)
+        .current_dir(&script_path).output()
+        .map_err(|e| format!("Falha ao chamar UABEA: {e}"))?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    if !out.status.success() || !text.contains("[SUCCESS]") {
+        return Err(format!("Falha ao extrair fonte com UABEA:\n{}", text));
+    }
+    text.lines().find_map(|line| line.strip_prefix("[SUCCESS] "))
+        .map(PathBuf::from).ok_or("UABEA não retornou o arquivo extraído.".to_string())
 }

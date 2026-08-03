@@ -1,11 +1,10 @@
 use gtk4 as gtk;
 use gtk::prelude::*;
 use gtk::{
-    Application, ApplicationWindow, Box, Button, Entry, Label, ListBox, ListBoxRow,
-    Orientation, ScrolledWindow, SearchEntry, Separator, CustomFilter,
+    Application, ApplicationWindow, Box, Button, Label, ListBox, ListBoxRow,
+    Orientation, ScrolledWindow, SearchEntry, Separator, TextView, WrapMode,
 };
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -240,18 +239,49 @@ fn add_dialog_row(orig: String, trad: String, listbox: &ListBox, data_store: &Rc
     let lbl = Label::new(Some(&orig));
     lbl.set_halign(gtk::Align::Start);
     lbl.set_wrap(true);
+    lbl.set_selectable(true);
+    lbl.set_tooltip_text(Some("Texto original — selecione para copiar"));
     vbox.append(&lbl);
 
-    let entry = Entry::new();
-    entry.set_text(&trad);
-    vbox.append(&entry);
+    let translated_view = TextView::new();
+    translated_view.set_wrap_mode(WrapMode::WordChar);
+    translated_view.set_accepts_tab(false);
+    translated_view.set_monospace(false);
+    let translated_buffer = translated_view.buffer();
+    translated_buffer.set_text(&trad);
+    let translated_scroll = ScrolledWindow::new();
+    translated_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    translated_scroll.set_child(Some(&translated_view));
+    let resize_editor: Rc<dyn Fn(&str)> = Rc::new({
+        let view = translated_view.clone();
+        let scroll = translated_scroll.clone();
+        move |text: &str| {
+            // Approximate wrapped visual lines at the editor's normal width.
+            // Keep short translations compact, while preserving a sensible
+            // maximum before the inner scrollbar takes over.
+            let lines: usize = text.lines()
+                .map(|line| usize::max(1, (line.chars().count() + 74) / 75))
+                .sum::<usize>()
+                .max(1);
+            let height = (lines.min(8) as i32 * 24 + 16).clamp(40, 208);
+            view.set_size_request(-1, height);
+            scroll.set_min_content_height(height);
+        }
+    });
+    resize_editor(&trad);
+    vbox.append(&translated_scroll);
     
     let data = Rc::new(RefCell::new(DialogData { original: orig, translated: trad }));
     data_store.borrow_mut().push(data.clone());
     
     let data_clone = data.clone();
-    entry.connect_changed(move |e| {
-        data_clone.borrow_mut().translated = e.text().to_string();
+    let resize_editor_clone = resize_editor.clone();
+    translated_buffer.connect_changed(move |buffer| {
+        let start = buffer.start_iter();
+        let end = buffer.end_iter();
+        let text = buffer.text(&start, &end, false).to_string();
+        resize_editor_clone(&text);
+        data_clone.borrow_mut().translated = text;
     });
 
     unsafe {

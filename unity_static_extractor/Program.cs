@@ -32,6 +32,18 @@ namespace unity_static_extractor
             {
                 Extract(dataFolder, jsonFile);
             }
+            else if (mode == "font-scan")
+            {
+                ScanFonts(dataFolder);
+            }
+            else if (mode == "font-inject" && args.Length >= 5)
+            {
+                ReplaceFont(dataFolder, args[2], args[3], args[4]);
+            }
+            else if (mode == "font-export" && args.Length >= 4)
+            {
+                ExportFont(dataFolder, args[2], args[3]);
+            }
             else if (mode == "inject")
             {
                 Console.WriteLine("[C#] Direct asset injection is disabled with the UABEA reader. Use the XUnity/BepInEx injection flow.");
@@ -164,7 +176,14 @@ namespace unity_static_extractor
         private static readonly HashSet<string> _displayTextFieldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "m_Text", "text", "m_DisplayText", "m_TranslatedText",
-            "m_OriginalText", "m_LocalizedText", "m_Tooltip", "m_Description"
+            "m_OriginalText", "m_LocalizedText", "m_Tooltip", "m_Description",
+            // Frequently used by ScriptableObject dialogue/localisation systems.
+            // These still pass IsValidText, so IDs and empty placeholders do not
+            // become translation entries.
+            "m_Title", "title", "m_Body", "body", "m_Message", "message",
+            "m_Dialogue", "dialogue", "m_Subtitle", "subtitle", "m_Label",
+            "label", "m_Prompt", "prompt", "m_Question", "question",
+            "m_Choice", "choice", "m_Response", "response", "m_Content", "content"
         };
         private static readonly HashSet<string> _textAssetJsonFieldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -209,13 +228,13 @@ namespace unity_static_extractor
             }
             catch (JsonException) { }
 
-            // A generic CSV/bytes TextAsset may be color/font/configuration
-            // data. Only use raw lines when its name indicates dialogue/text.
-            if (!IsLikelyTextAsset(name)) return;
+            // TextAsset files are commonly CSV, TSV, Ink/Yarn or a plain list,
+            // and their asset names are often hashes.  Do not discard those just
+            // because their name is generic; only add lines that look like text.
             foreach (var line in script.Split('\n'))
             {
                 var trimmed = line.Trim();
-                if (!trimmed.StartsWith("\"") && IsValidText(trimmed)) results.Add(trimmed);
+                if (IsValidText(trimmed)) results.Add(trimmed);
             }
         }
 
@@ -305,16 +324,267 @@ namespace unity_static_extractor
             }
         }
 
+        // Font handling uses the exact UABEA/AssetsTools.NET representation:
+        // a Font asset (class 128) stores an importable TrueType/OpenType file
+        // in m_FontData.Array.  TMP SDF assets intentionally are not offered
+        // here: replacing only their source file does not rebuild its atlas.
+        static string ResolveDataFolder(string root)
+        {
+            if (Directory.Exists(root) && Path.GetFileName(root).EndsWith("_Data", StringComparison.OrdinalIgnoreCase))
+                return root;
+            if (!Directory.Exists(root)) return root;
+            return Directory.GetDirectories(root, "*_Data", SearchOption.TopDirectoryOnly).FirstOrDefault() ?? root;
+        }
+
+        static IEnumerable<string> SerializedAssetFiles(string root)
+        {
+            if (!Directory.Exists(root)) yield break;
+            foreach (var file in Directory.GetFiles(root, "*", SearchOption.AllDirectories))
+            {
+                var name = Path.GetFileName(file);
+                if (name.EndsWith(".resS", StringComparison.OrdinalIgnoreCase) ||
+                    name.EndsWith(".resource", StringComparison.OrdinalIgnoreCase)) continue;
+                if (name.EndsWith(".assets", StringComparison.OrdinalIgnoreCase) ||
+                    name.StartsWith("sharedassets", StringComparison.OrdinalIgnoreCase) ||
+                    name.StartsWith("level", StringComparison.OrdinalIgnoreCase))
+                    yield return file;
+            }
+        }
+
+        static AssetsManager CreateManager(string dataFolder)
+        {
+            var manager = new AssetsManager();
+            string tpkPath = Path.Combine(AppContext.BaseDirectory, "classdata.tpk");
+            manager.LoadClassPackage(File.Exists(tpkPath) ? tpkPath : "classdata.tpk");
+            string managed = Path.Combine(dataFolder, "Managed");
+            if (Directory.Exists(managed)) manager.MonoTempGenerator = new MonoCecilTempGenerator(managed);
+            return manager;
+        }
+
+        static bool TryGetEmbeddedFont(AssetTypeValueField baseField, out AssetTypeValueField fontData)
+        {
+            fontData = null!;
+            try
+            {
+                var data = baseField["m_FontData.Array"];
+                if (data == null || data.IsDummy || data.Value == null) return false;
+                // UABEA's FontPlugin marks this vector as ByteArray before
+                // reading/writing it; doing the same supports older Unity files.
+                data.TemplateField.ValueType = AssetValueType.ByteArray;
+                fontData = data;
+                return true;
+            }
+            catch { return false; }
+        }
+
+        static bool HasField(AssetTypeValueField field, string name)
+        {
+            try { var value = field[name]; return value != null && !value.IsDummy; }
+            catch { return false; }
+        }
+
+        static void ScanFontsInAssets(AssetsManager manager, AssetsFileInstance inst, string label, HashSet<string> emitted, ref int count)
+        {
+            manager.LoadClassDatabaseFromPackage(inst.file.Metadata.UnityVersion);
+            foreach (var info in inst.file.GetAssetsOfType((int)AssetClassID.Font))
+            {
+                try
+                {
+                    var field = manager.GetBaseField(inst, info);
+                    if (field == null || !TryGetEmbeddedFont(field, out var bytes) || bytes.AsByteArray.Length == 0) continue;
+                    var name = field["m_Name"].AsString.Replace('|', ' ');
+                    if (emitted.Add($"EMBEDDED|{label}|{name}|{info.PathId}"))
+                    {
+                        Console.WriteLine($"[FONT_SCAN] EMBEDDED|{label}|{name}|{info.PathId}"); count++;
+                    }
+                }
+                catch { }
+            }
+
+            // TMP_FontAsset is a MonoBehaviour in player builds. It stores a
+            // baked SDF atlas, not a raw TTF/OTF; list it so the user sees the
+            // actual source of the on-screen font, but don't offer unsafe import.
+            foreach (var info in inst.file.GetAssetsOfType(114))
+            {
+                try
+                {
+                    var field = manager.GetBaseField(inst, info);
+                    if (field == null || (!HasField(field, "m_FaceInfo") && !HasField(field, "m_AtlasTexture"))) continue;
+                    var name = field["m_Name"].AsString.Replace('|', ' ');
+                    if (String.IsNullOrWhiteSpace(name)) continue;
+                    if (emitted.Add($"TMP|{label}|{name}|{info.PathId}"))
+                    {
+                        Console.WriteLine($"[FONT_SCAN] TMP|{label}|{name}|{info.PathId}"); count++;
+                    }
+                }
+                catch { }
+            }
+        }
+
+        static void ScanFonts(string root)
+        {
+            string dataFolder = ResolveDataFolder(root);
+            var manager = CreateManager(dataFolder);
+            int count = 0;
+            var emitted = new HashSet<string>();
+            foreach (var file in SerializedAssetFiles(dataFolder).Distinct())
+            {
+                try
+                {
+                    var inst = manager.LoadAssetsFile(file, true);
+                    var relative = Path.GetRelativePath(dataFolder, file).Replace('\\', '/');
+                    ScanFontsInAssets(manager, inst, relative, emitted, ref count);
+                    inst.file.Reader.Close();
+                }
+                catch { }
+            }
+
+            // TextMeshPro assets are commonly packed in Addressables/bundles.
+            // Read each entry with the same UABEA parser used by the text scanner.
+            var extensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".bundle", ".unity3d", ".ab", ".assetbundle" };
+            foreach (var bundlePath in Directory.GetFiles(dataFolder, "*", SearchOption.AllDirectories)
+                .Where(p => extensions.Contains(Path.GetExtension(p))))
+            {
+                try
+                {
+                    var bundle = manager.LoadBundleFile(bundlePath, true);
+                    for (int index = 0; index < bundle.file.BlockAndDirInfo.DirectoryInfos.Length; index++)
+                    {
+                        try
+                        {
+                            var inst = manager.LoadAssetsFileFromBundle(bundle, index, true);
+                            if (inst == null) continue;
+                            var entry = bundle.file.BlockAndDirInfo.DirectoryInfos[index].Name.Replace('|', ' ');
+                            var label = $"{Path.GetRelativePath(dataFolder, bundlePath).Replace('\\', '/')}::{entry}";
+                            ScanFontsInAssets(manager, inst, label, emitted, ref count);
+                        }
+                        catch { }
+                    }
+                    bundle.file.Reader.Close();
+                }
+                catch { }
+            }
+            Console.WriteLine($"[C#] UABEA found {count} embedded Font assets.");
+        }
+
+        static string SafeFileName(string value)
+        {
+            foreach (var invalid in Path.GetInvalidFileNameChars()) value = value.Replace(invalid, '_');
+            return String.IsNullOrWhiteSpace(value) ? "unity-font" : value;
+        }
+
+        static void ExportFont(string root, string fontLocator, string outputDirectory)
+        {
+            string dataFolder = ResolveDataFolder(root);
+            var pieces = fontLocator.Split('|');
+            if (pieces.Length != 2 || !long.TryParse(pieces[1], out var pathId))
+            {
+                Console.WriteLine("[ERROR] Identificador de fonte inválido."); return;
+            }
+            string assetPath = Path.Combine(dataFolder, pieces[0].Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(assetPath)) { Console.WriteLine("[ERROR] Asset da fonte não encontrado."); return; }
+            try
+            {
+                var manager = CreateManager(dataFolder);
+                var inst = manager.LoadAssetsFile(assetPath, true);
+                manager.LoadClassDatabaseFromPackage(inst.file.Metadata.UnityVersion);
+                var info = inst.file.GetAssetsOfType((int)AssetClassID.Font).FirstOrDefault(i => i.PathId == pathId);
+                var field = info == null ? null : manager.GetBaseField(inst, info);
+                if (field == null || !TryGetEmbeddedFont(field, out var fontData) || fontData.AsByteArray.Length == 0)
+                    { Console.WriteLine("[ERROR] Esta fonte não possui dados TTF/OTF incorporados."); return; }
+                var bytes = fontData.AsByteArray;
+                var extension = bytes.Length >= 4 && bytes[0] == 0x4f && bytes[1] == 0x54 && bytes[2] == 0x54 && bytes[3] == 0x4f ? "otf" : "ttf";
+                Directory.CreateDirectory(outputDirectory);
+                var output = Path.Combine(outputDirectory, $"{SafeFileName(field["m_Name"].AsString)}-{pathId}.{extension}");
+                File.WriteAllBytes(output, bytes);
+                inst.file.Reader.Close();
+                Console.WriteLine("[SUCCESS] " + output);
+            }
+            catch (Exception ex) { Console.WriteLine("[ERROR] " + ex.Message); }
+        }
+
+        static void ReplaceFont(string root, string fontLocator, string expectedName, string fontFile)
+        {
+            string dataFolder = ResolveDataFolder(root);
+            if (!File.Exists(fontFile)) { Console.WriteLine("[ERROR] Arquivo de fonte não encontrado."); return; }
+            var pieces = fontLocator.Split('|');
+            if (pieces.Length != 2 || !long.TryParse(pieces[1], out var pathId))
+            {
+                Console.WriteLine("[ERROR] Identificador de fonte inválido."); return;
+            }
+            string assetPath = Path.Combine(dataFolder, pieces[0].Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(assetPath)) { Console.WriteLine("[ERROR] Asset da fonte não encontrado."); return; }
+
+            var manager = CreateManager(dataFolder);
+            try
+            {
+                var inst = manager.LoadAssetsFile(assetPath, true);
+                manager.LoadClassDatabaseFromPackage(inst.file.Metadata.UnityVersion);
+                var info = inst.file.GetAssetsOfType((int)AssetClassID.Font).FirstOrDefault(i => i.PathId == pathId);
+                if (info == null) { Console.WriteLine("[ERROR] Fonte não encontrada no asset."); return; }
+                var field = manager.GetBaseField(inst, info);
+                if (field == null || !TryGetEmbeddedFont(field, out var fontData)) { Console.WriteLine("[ERROR] Esta fonte não possui m_FontData incorporado."); return; }
+                if (!string.IsNullOrEmpty(expectedName) && !String.Equals(field["m_Name"].AsString, expectedName, StringComparison.Ordinal))
+                    { Console.WriteLine("[ERROR] A fonte selecionada mudou; escaneie novamente."); return; }
+
+                fontData.AsByteArray = File.ReadAllBytes(fontFile);
+                byte[] newData = field.WriteToByteArray();
+                var replacer = new AssetsReplacerFromMemory(info.PathId, info.TypeId, 0xffff, newData);
+                string backup = assetPath + ".tbx-font-backup";
+                if (!File.Exists(backup)) File.Copy(assetPath, backup);
+                string temporary = assetPath + ".tbx-font-temp";
+                using (var stream = File.Create(temporary))
+                using (var writer = new AssetsFileWriter(stream))
+                    inst.file.Write(writer, 0, new List<AssetsReplacer> { replacer });
+                inst.file.Reader.Close();
+                File.Move(temporary, assetPath, true);
+                Console.WriteLine("[SUCCESS] Fonte incorporada com UABEA. Backup: " + backup);
+            }
+            catch (Exception ex) { Console.WriteLine("[ERROR] " + ex.Message); }
+        }
+
+        // A sizable part of Unity UI is created in code (including dialogue
+        // choices and warning screens), rather than serialized in .assets.
+        // UABEA handles serialized data; Mono.Cecil is used only for managed
+        // game assemblies so those player-facing ldstr values are not missed.
+        static void ExtractManagedStrings(string managedFolder, HashSet<string> results)
+        {
+            if (!Directory.Exists(managedFolder)) return;
+            int added = 0;
+            foreach (var assemblyPath in Directory.GetFiles(managedFolder, "*.dll", SearchOption.TopDirectoryOnly))
+            {
+                var name = Path.GetFileNameWithoutExtension(assemblyPath);
+                // Plug-ins contain editor diagnostics, licenses and framework
+                // messages by the thousands. Game scripts are conventionally
+                // compiled into these two assemblies, including IL2CPP hybrid
+                // projects that still ship a managed front-end.
+                if (!name.Equals("Assembly-CSharp", StringComparison.OrdinalIgnoreCase) &&
+                    !name.Equals("Assembly-CSharp-firstpass", StringComparison.OrdinalIgnoreCase)) continue;
+                try
+                {
+                    using var module = ModuleDefinition.ReadModule(assemblyPath, new ReaderParameters { ReadSymbols = false });
+                    foreach (var type in module.GetTypes())
+                    foreach (var method in type.Methods)
+                    {
+                        if (!method.HasBody) continue;
+                        foreach (var instruction in method.Body.Instructions)
+                        {
+                            if (instruction.OpCode != OpCodes.Ldstr || instruction.Operand is not string value) continue;
+                            if (IsValidText(value) && results.Add(value)) added++;
+                        }
+                    }
+                }
+                catch { /* stripped/unsupported assemblies are non-fatal */ }
+            }
+            Console.WriteLine($"[C#] Added {added} player-facing strings from managed game code.");
+        }
+
 
         static void Extract(string dataFolder, string jsonFile)
         {
             Console.WriteLine($"[C#] EXTRACT mode started for: {dataFolder}");
             HashSet<string> allTexts = new HashSet<string>();
 
-            // Managed IL literals have no field/type metadata. Scanning every
-            // ldstr mixes exception messages, keys and code into translations,
-            // so strict mode intentionally limits itself to serialized assets.
-            Console.WriteLine("[C#] Strict mode: skipping Assembly-CSharp.dll literals.");
             string managedFolder = Path.Combine(dataFolder, "Managed");
 
             Console.WriteLine("[C#] Extracting from .assets and .bundle files...");
@@ -404,6 +674,8 @@ namespace unity_static_extractor
                 Console.WriteLine($"[C#] Scanning bundle: {Path.GetFileName(bundlePath)}");
                 ExtractBundle(manager, bundlePath, allTexts);
             }
+
+            ExtractManagedStrings(managedFolder, allTexts);
 
             var opts = new JsonSerializerOptions { WriteIndented = true, Encoder = JavaScriptEncoder.Create(UnicodeRanges.All) };
             File.WriteAllText(jsonFile, JsonSerializer.Serialize(allTexts.ToList(), opts));
