@@ -8,6 +8,7 @@ using System.Text.Encodings.Web;
 using System.Text.Unicode;
 using AssetsTools.NET;
 using AssetsTools.NET.Extra;
+using AssetsTools.NET.Texture;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using System.Text.RegularExpressions;
@@ -43,6 +44,10 @@ namespace unity_static_extractor
             else if (mode == "font-export" && args.Length >= 4)
             {
                 ExportFont(dataFolder, args[2], args[3]);
+            }
+            else if (mode == "tmp-atlas-export" && args.Length >= 5)
+            {
+                ExportTmpAtlas(dataFolder, args[2], args[3], args[4]);
             }
             else if (mode == "inject")
             {
@@ -432,6 +437,7 @@ namespace unity_static_extractor
                 try
                 {
                     var inst = manager.LoadAssetsFile(file, true);
+                    Console.WriteLine($"[C#] Unity version: {inst.file.Metadata.UnityVersion}");
                     var relative = Path.GetRelativePath(dataFolder, file).Replace('\\', '/');
                     ScanFontsInAssets(manager, inst, relative, emitted, ref count);
                     inst.file.Reader.Close();
@@ -500,7 +506,76 @@ namespace unity_static_extractor
                 inst.file.Reader.Close();
                 Console.WriteLine("[SUCCESS] " + output);
             }
-            catch (Exception ex) { Console.WriteLine("[ERROR] " + ex.Message); }
+            catch (Exception ex) { Console.WriteLine("[ERROR] " + ex); }
+        }
+
+        static byte[]? ReadTextureBytes(TextureFile texture, AssetsFileInstance inst)
+        {
+            if (texture.m_StreamData.size == 0 || String.IsNullOrEmpty(texture.m_StreamData.path)) return texture.pictureData;
+            var path = texture.m_StreamData.path.StartsWith("archive:/")
+                ? Path.Combine(Path.GetDirectoryName(inst.path) ?? "", Path.GetFileName(texture.m_StreamData.path))
+                : Path.Combine(Path.GetDirectoryName(inst.path) ?? "", texture.m_StreamData.path);
+            if (!File.Exists(path)) return null;
+            using var stream = File.OpenRead(path);
+            stream.Position = (long)texture.m_StreamData.offset;
+            return new BinaryReader(stream).ReadBytes((int)texture.m_StreamData.size);
+        }
+
+        // TMP player builds keep a baked grayscale SDF atlas instead of the
+        // original font file. Export it as portable PPM so GTK can display an
+        // honest preview without a platform-specific texture decoder.
+        static void ExportTmpAtlas(string root, string assetRelativePath, string tmpPathIdText, string outputDirectory)
+        {
+            if (!long.TryParse(tmpPathIdText, out var tmpPathId)) { Console.WriteLine("[ERROR] TMP pathId inválido."); return; }
+            string dataFolder = ResolveDataFolder(root);
+            string assetPath = Path.Combine(dataFolder, assetRelativePath.Replace('/', Path.DirectorySeparatorChar));
+            try
+            {
+                var manager = CreateManager(dataFolder);
+                var inst = manager.LoadAssetsFile(assetPath, true);
+                manager.LoadClassDatabaseFromPackage(inst.file.Metadata.UnityVersion);
+                var tmpInfo = inst.file.GetAssetsOfType(114).FirstOrDefault(i => i.PathId == tmpPathId);
+                var tmp = tmpInfo == null ? null : manager.GetBaseField(inst, tmpInfo);
+                if (tmp == null) { Console.WriteLine("[ERROR] Asset TMP não encontrado."); return; }
+                var ptr = tmp["m_AtlasTexture"];
+                if (ptr.IsDummy)
+                {
+                    var atlases = tmp["m_AtlasTextures"];
+                    if (!atlases.IsDummy)
+                    {
+                        var array = atlases["Array"];
+                        if (!array.IsDummy && array.Children.Count > 0) ptr = array.Children[0];
+                    }
+                }
+                if (ptr.IsDummy) { Console.WriteLine("[ERROR] Referência do atlas TMP não encontrada."); return; }
+                var ext = manager.GetExtAsset(inst, ptr);
+                if (ext.info == null || ext.file == null) { Console.WriteLine("[ERROR] Atlas Texture2D não encontrado."); return; }
+                var textureField = manager.GetBaseField(ext.file, ext.info);
+                if (textureField == null) { Console.WriteLine("[ERROR] Não foi possível ler o atlas."); return; }
+                var dataField = textureField["image data"];
+                if (dataField.IsDummy) dataField = textureField["m_ImageData"];
+                if (dataField.IsDummy) { Console.WriteLine("[ERROR] Dados de imagem do atlas não encontrados."); return; }
+                dataField.TemplateField.ValueType = AssetValueType.ByteArray;
+                var texture = TextureFile.ReadTextureFile(textureField);
+                var raw = ReadTextureBytes(texture, ext.file);
+                int pixels = texture.m_Width * texture.m_Height;
+                if (raw == null || pixels <= 0 || raw.Length < pixels) { Console.WriteLine("[ERROR] Atlas comprimido ou sem dados legíveis."); return; }
+                Directory.CreateDirectory(outputDirectory);
+                string output = Path.Combine(outputDirectory, $"tmp-atlas-{tmpPathId}.ppm");
+                using (var stream = File.Create(output))
+                using (var writer = new BinaryWriter(stream))
+                {
+                    writer.Write(Encoding.ASCII.GetBytes($"P6\n{texture.m_Width} {texture.m_Height}\n255\n"));
+                    int stride = raw.Length >= pixels * 4 ? 4 : raw.Length >= pixels * 2 ? 2 : 1;
+                    for (int i = 0; i < pixels; i++)
+                    {
+                        byte value = raw[i * stride + (stride == 4 ? 3 : 0)];
+                        writer.Write(value); writer.Write(value); writer.Write(value);
+                    }
+                }
+                Console.WriteLine("[SUCCESS] " + output);
+            }
+            catch (Exception ex) { Console.WriteLine("[ERROR] " + ex); }
         }
 
         static void ReplaceFont(string root, string fontLocator, string expectedName, string fontFile)

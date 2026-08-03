@@ -154,8 +154,7 @@ pub fn show_font_window(parent: &gtk::ApplicationWindow, game_path: String, engi
                 match fonts {
                     Ok(f_list) => {
                         if f_list.is_empty() {
-                            let lbl = Label::new(Some("Nenhuma fonte TTF/OTF embutida encontrada. Fontes TextMeshPro (SDF) não podem receber um .ttf diretamente; use a fonte original ou um asset bundle TMP."));
-                            lbl.set_wrap(true);
+                            let lbl = Label::new(Some("Nenhuma fonte encontrada."));
                             lbl.set_margin_top(10); lbl.set_margin_bottom(10);
                             list_fonts_inner.append(&lbl);
                         } else {
@@ -235,7 +234,8 @@ pub fn show_font_window(parent: &gtk::ApplicationWindow, game_path: String, engi
                 match fonts {
                     Ok(f_list) => {
                         if f_list.is_empty() {
-                            let lbl = Label::new(Some("Nenhuma fonte encontrada."));
+                            let lbl = Label::new(Some("Nenhuma fonte TTF/OTF embutida encontrada. Fontes TextMeshPro (SDF) não podem receber um .ttf diretamente; use a fonte original ou um asset bundle TMP."));
+                            lbl.set_wrap(true);
                             lbl.set_margin_top(10); lbl.set_margin_bottom(10);
                             list_fonts_inner.append(&lbl);
                         } else {
@@ -699,11 +699,25 @@ fn create_font_row_unity(font_id: &str, game_path: &str, parent_win: &Applicatio
             }
         }
     } else {
-        let status = Label::new(Some("Fonte TMP/SDF detectada. A prévia do atlas não pode ser convertida com segurança para TTF/OTF."));
-        status.add_css_class("muted-label");
-        status.set_wrap(true);
-        status.set_halign(gtk::Align::Start);
-        bx_v.append(&status);
+        match export_tmp_atlas_preview(&gp, font_parts[1], font_parts[3]) {
+            Ok(path) => {
+                let status = Label::new(Some("Prévia do atlas SDF usado pelo TextMeshPro:"));
+                status.add_css_class("muted-label");
+                status.set_halign(gtk::Align::Start);
+                let picture = Picture::for_filename(path);
+                picture.set_halign(gtk::Align::Start);
+                picture.set_size_request(260, 120);
+                bx_v.append(&status);
+                bx_v.append(&picture);
+            }
+            Err(error) => {
+                let status = Label::new(Some(&format!("Prévia do atlas indisponível: {error}")));
+                status.add_css_class("muted-label");
+                status.set_wrap(true);
+                status.set_halign(gtk::Align::Start);
+                bx_v.append(&status);
+            }
+        }
     }
 
     row.set_child(Some(&bx_v));
@@ -895,4 +909,32 @@ fn export_unity_original_font(game_path_str: &str, target_internal_path: &str) -
     }
     text.lines().find_map(|line| line.strip_prefix("[SUCCESS] "))
         .map(PathBuf::from).ok_or("UABEA não retornou o arquivo extraído.".to_string())
+}
+
+fn export_tmp_atlas_preview(game_path_str: &str, asset_path: &str, path_id: &str) -> Result<PathBuf, String> {
+    let mut base_dir = PathBuf::from(game_path_str);
+    if base_dir.is_file() { base_dir = base_dir.parent().ok_or("Pasta do jogo inválida.")?.to_path_buf(); }
+    let output_dir = base_dir.join("tpg_temp_fonts");
+    let script_path = crate::paths::app_root().join("unity_static_extractor");
+    let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
+    let mut command = if packaged.is_file() { std::process::Command::new(packaged) } else {
+        let mut command = std::process::Command::new("dotnet"); command.arg("run").arg("--"); command
+    };
+    let output = command.arg("tmp-atlas-export").arg(&base_dir).arg(asset_path).arg(path_id).arg(&output_dir)
+        .current_dir(&script_path).output().map_err(|e| format!("Falha ao chamar UABEA: {e}"))?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    if !output.status.success() || !text.contains("[SUCCESS]") { return Err(text.trim().to_string()); }
+    text.lines().find_map(|line| line.strip_prefix("[SUCCESS] ")).map(PathBuf::from)
+        .ok_or("UABEA não retornou a prévia do atlas.".to_string())
+        .and_then(|ppm_path| {
+            // GTK on Windows does not bundle a PPM decoder. Convert the
+            // temporary, lossless atlas to PNG before handing it to Picture.
+            let png_path = ppm_path.with_extension("png");
+            image::open(&ppm_path)
+                .map_err(|e| format!("Falha ao abrir atlas temporário: {e}"))?
+                .save(&png_path)
+                .map_err(|e| format!("Falha ao converter atlas para PNG: {e}"))?;
+            let _ = fs::remove_file(ppm_path);
+            Ok(png_path)
+        })
 }

@@ -19,6 +19,10 @@
       <HintPath>../third_party/UABEA/Libs/AssetsTools.NET.MonoCecil.dll</HintPath>
       <Private>true</Private>
     </Reference>
+    <Reference Include="AssetsTools.NET.Texture">
+      <HintPath>../third_party/UABEA/Libs/AssetsTools.NET.Texture.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
     <!-- UABEA references Mono.Cecil from NuGet rather than shipping it in Libs. -->
     <PackageReference Include="Mono.Cecil" Version="0.11.4" />
   </ItemGroup>

@@ -67,6 +67,22 @@ const CSS: &str = "
 /* ─── Global ───────────────────────────────────────────────────── */
 * { font-family: sans-serif; }
 
+/* Secondary windows (editor, engine settings and font tool) do not use the
+   main shell. Without an explicit background the Windows GTK theme paints
+   their root/viewport white. */
+window, window.background, dialog, notebook, notebook > stack,
+scrolledwindow, scrolledwindow > viewport, listbox {
+    background-color: #1e1e2e;
+    color: #ffffff;
+}
+window.editor-window { background-color: #1e1e2e; }
+.sidebar { background-color: #161622; }
+listbox row { background-color: #1e1e2e; color: #ffffff; }
+listbox row:selected { background-color: #313244; }
+notebook > header { background-color: #11111b; }
+notebook > header > tabs > tab { background-color: #161622; color: #a6adc8; }
+notebook > header > tabs > tab:checked { background-color: #313244; color: #ffffff; }
+
 window.main-transparent {
     background-color: transparent;
 }
@@ -460,6 +476,21 @@ separator { background-color: #313244; min-height: 1px; }
 // This intentionally avoids animation/filter/text-shadow rules so it works
 // with the older GTK runtime commonly bundled on Windows.
 const WINDOWS_BUTTON_CSS: &str = "
+/* Apply at USER priority: Windows GTK otherwise lets its native theme paint
+   modal windows and their template boxes white. */
+window, window.background, dialog, messagedialog, .message-dialog,
+window > box, dialog > box, messagedialog > box,
+notebook, notebook > stack, scrolledwindow, scrolledwindow > viewport, listbox {
+    background-color: #1e1e2e;
+    color: #ffffff;
+}
+window.editor-window, .sidebar { background-color: #161622; }
+label { color: #ffffff; }
+label.muted-label { color: #a6adc8; }
+label.warning-label { color: #f38ba8; }
+label.section-label-purple { color: #cba6f7; }
+listbox row { background-color: #1e1e2e; color: #ffffff; }
+listbox row:selected { background-color: #313244; }
 button { background-image: none; color: #ffffff; }
 button.btn-translate-renpy { background-image: none; background-color: #f9e2af; color: #11111b; border-color: #f9e2af; }
 button.btn-translate-unity, button.btn-editor { background-image: none; background-color: #89b4fa; color: #11111b; border-color: #89b4fa; }
