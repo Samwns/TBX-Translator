@@ -561,8 +561,9 @@ pub fn append_log(buf: &TextBuffer, msg: &str) {
 }
 
 #[cfg(target_os = "windows")]
-pub fn apply_windows_native_styling(window: &impl IsA<gtk::Window>) {
-    window.connect_realize(|win| {
+pub fn apply_windows_native_styling(window: &(impl IsA<gtk::Window> + IsA<gtk::Widget>)) {
+    let win_ref = window.upcast_ref::<gtk::Window>().clone();
+    window.connect_realize(move |_| {
         #[link(name = "dwmapi")]
         extern "system" {
             fn DwmSetWindowAttribute(
@@ -577,7 +578,7 @@ pub fn apply_windows_native_styling(window: &impl IsA<gtk::Window>) {
         const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
         const DWMWCP_ROUND: u32 = 2;
 
-        let title = win.title().unwrap_or_default().to_string();
+        let title = win_ref.title().unwrap_or_default().to_string();
         if title.is_empty() { return; }
 
         std::thread::spawn(move || {
@@ -620,7 +621,7 @@ pub fn apply_windows_native_styling(window: &impl IsA<gtk::Window>) {
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn apply_windows_native_styling(_window: &impl IsA<gtk::Window>) {}
+pub fn apply_windows_native_styling(_window: &(impl IsA<gtk::Window> + IsA<gtk::Widget>)) {}
 
 pub fn build_ui(app: &Application) {
     // Load CSS
@@ -1713,7 +1714,6 @@ pub fn build_ui(app: &Application) {
                   });
               });
               
-              let pb2 = pb.clone(); let pl2 = pl.clone();
               let lb2 = lb_jogo.clone(); let lbg2 = lb_geral.clone(); let as2 = a_stack.clone();
               let window2 = app_window.clone();
               

@@ -118,7 +118,7 @@ pub fn show_editor(app: &Application, folder: PathBuf) {
         if let Some(row) = row {
             unsafe {
                 if let Some(path_ptr) = row.data::<PathBuf>("path") {
-                    let path = unsafe { path_ptr.as_ref() }.clone();
+                    let path = path_ptr.as_ref().clone();
                     *current_file_clone.borrow_mut() = Some(path.clone());
                     
                     // clear list
@@ -142,7 +142,7 @@ pub fn show_editor(app: &Application, folder: PathBuf) {
             if let Some(row) = c.downcast_ref::<ListBoxRow>() {
                 unsafe {
                     if let Some(data_ptr) = row.data::<Rc<RefCell<DialogData>>>("data") {
-                        let data = unsafe { data_ptr.as_ref() }.borrow();
+                        let data = data_ptr.as_ref().borrow();
                         let show = text.is_empty() 
                             || data.original.to_lowercase().contains(&text)
                             || data.translated.to_lowercase().contains(&text);

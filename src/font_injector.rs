@@ -2,10 +2,8 @@ use gtk4 as gtk;
 use gtk::prelude::*;
 use std::path::{Path, PathBuf};
 use std::fs;
-use gtk::{prelude::*, Align, ApplicationWindow, Box, Button, Dialog, Entry, FileChooserNative, FileChooserAction, ResponseType, FileChooserDialog, Label, Orientation, TextView, CssProvider, Stack, ListBox, ListBoxRow, ScrolledWindow, Image, Picture};
+use gtk::{ApplicationWindow, Box, Button, Entry, FileChooserNative, FileChooserAction, ResponseType, Label, Orientation, Stack, ListBox, ListBoxRow, ScrolledWindow, Picture};
 use rusttype::{Font, Scale, point};
-use std::rc::Rc;
-use std::cell::RefCell;
 use std::thread;
 use serde_json;
 

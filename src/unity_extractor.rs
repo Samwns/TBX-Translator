@@ -245,7 +245,7 @@ pub async fn extract_texts(
             .await.unwrap_or_else(|_| vec![]);
 
         for (i, original) in chunk.iter().enumerate() {
-            let mut trad = translated.get(i).cloned().unwrap_or_default();
+            let trad = translated.get(i).cloned().unwrap_or_default();
             let trad = if trad.trim().is_empty() { 
                 original.clone() 
             } else { 
