@@ -14,3 +14,16 @@ pub fn app_root() -> PathBuf {
 pub fn asset_path(name: &str) -> PathBuf {
     app_root().join("assets").join(name)
 }
+
+/// Cria um `std::process::Command` com a flag `CREATE_NO_WINDOW` no Windows,
+/// impedindo que janelas pretas de terminal (cmd.exe) fiquem piscando na interface.
+pub fn hidden_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    #[allow(unused_mut)]
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    cmd
+}

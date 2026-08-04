@@ -560,6 +560,68 @@ pub fn append_log(buf: &TextBuffer, msg: &str) {
     buf.insert(&mut end, &format!("[{:02}:{:02}:{:02}] {}\n", h, m, s, msg));
 }
 
+#[cfg(target_os = "windows")]
+pub fn apply_windows_native_styling(window: &impl IsA<gtk::Window>) {
+    window.connect_realize(|win| {
+        #[link(name = "dwmapi")]
+        extern "system" {
+            fn DwmSetWindowAttribute(
+                hwnd: *mut std::ffi::c_void,
+                dw_attribute: u32,
+                pv_attribute: *const std::ffi::c_void,
+                cb_attribute: u32,
+            ) -> i32;
+        }
+
+        const DWMWA_USE_IMMERSIVE_DARK_MODE: u32 = 20;
+        const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
+        const DWMWCP_ROUND: u32 = 2;
+
+        let title = win.title().unwrap_or_default().to_string();
+        if title.is_empty() { return; }
+
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            #[link(name = "user32")]
+            extern "system" {
+                fn FindWindowW(
+                    lp_class_name: *const u16,
+                    lp_window_name: *const u16,
+                ) -> *mut std::ffi::c_void;
+            }
+
+            use std::os::windows::ffi::OsStrExt;
+            let wide_title: Vec<u16> = std::ffi::OsStr::new(&title)
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect();
+
+            unsafe {
+                let hwnd = FindWindowW(std::ptr::null(), wide_title.as_ptr());
+                if !hwnd.is_null() {
+                    let dark: i32 = 1;
+                    let _ = DwmSetWindowAttribute(
+                        hwnd,
+                        DWMWA_USE_IMMERSIVE_DARK_MODE,
+                        &dark as *const _ as *const std::ffi::c_void,
+                        std::mem::size_of::<i32>() as u32,
+                    );
+                    let round: u32 = DWMWCP_ROUND;
+                    let _ = DwmSetWindowAttribute(
+                        hwnd,
+                        DWMWA_WINDOW_CORNER_PREFERENCE,
+                        &round as *const _ as *const std::ffi::c_void,
+                        std::mem::size_of::<u32>() as u32,
+                    );
+                }
+            }
+        });
+    });
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn apply_windows_native_styling(_window: &impl IsA<gtk::Window>) {}
+
 pub fn build_ui(app: &Application) {
     // Load CSS
     let provider = CssProvider::new();
@@ -602,6 +664,7 @@ pub fn build_ui(app: &Application) {
         .resizable(false)
         .decorated(false)
         .build();
+    apply_windows_native_styling(&window);
     window.set_default_size(950, 650);
     window.set_size_request(950, 650);
     window.add_css_class("main-transparent");
@@ -1057,6 +1120,7 @@ pub fn build_ui(app: &Application) {
         .transient_for(&window)
         .hide_on_close(true)
         .build();
+    apply_windows_native_styling(&engine_win);
     
     let notebook = gtk::Notebook::new();
     

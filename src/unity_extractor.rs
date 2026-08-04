@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -66,7 +65,7 @@ fn extract_with_unitypy(
     let unitypy_checkout = extractor_dir
         .parent()
         .map(|root| root.join("third_party").join("UnityPy"));
-    let mut command = Command::new(python);
+    let mut command = crate::paths::hidden_command(python);
     command.arg(&script).arg(data_dir).arg(output_json);
     // A local checkout wins over a globally installed UnityPy. Python keeps its
     // normal dependency resolution, so a missing dependency is reported in the
@@ -136,12 +135,12 @@ pub async fn extract_texts(
     
     let packaged_extractor = extractor_dir.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
     let mut command = if packaged_extractor.is_file() {
-        Command::new(packaged_extractor)
+        crate::paths::hidden_command(packaged_extractor)
     } else {
         if !csproj.exists() {
             return Err(format!("Extrator Unity não encontrado em: {}", extractor_dir.display()));
         }
-        let mut command = Command::new("dotnet");
+        let mut command = crate::paths::hidden_command("dotnet");
         command.arg("run").arg("--project").arg(&csproj).arg("--");
         command
     };
@@ -428,7 +427,7 @@ pub async fn inject_texts(
         // 3. Rodar o jogo brevemente para gerar configs iniciais do BepInEx
         let _ = tx.send(UiMsg::Log("[Unity] Iniciando jogo brevemente para gerar configs do BepInEx...".into()));
         
-        let game_process = Command::new(executable)
+        let game_process = crate::paths::hidden_command(executable)
             .env("WINEDLLOVERRIDES", "winhttp=n,b")
             .spawn();
         

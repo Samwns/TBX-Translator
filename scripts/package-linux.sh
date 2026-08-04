@@ -45,7 +45,7 @@ cp -a assets BepInEx XUnity_AutoTranslator_bepInEx "$APP_DIR/"
 mkdir -p "$APP_DIR/third_party/UnityPy"
 cp -a third_party/UnityPy/UnityPy "$APP_DIR/third_party/UnityPy/"
 cp unity_static_extractor/unitypy_extract.py "$APP_DIR/unity_static_extractor/"
-cp README.md LICENSE "$APP_DIR/"
+cp README.md LICENSE THIRD_PARTY_NOTICES.md "$APP_DIR/"
 
 echo "==> Montando pacotes nativos"
 mkdir -p "$PKG_ROOT/opt/tbx-translator"
@@ -59,13 +59,13 @@ mkdir -p "$RELEASE_DIR"
 
 fpm -s dir -t deb -n tbx-translator -v "$VERSION" -C "$PKG_ROOT" \
     -p "$RELEASE_DIR/TBX-Translator-Debian-Ubuntu-amd64.deb" \
-    --license "CC-BY-NC-SA-4.0" --depends libgtk-4-1 opt usr
+    --license "CC-BY-NC-SA-4.0" opt usr
 fpm -s dir -t rpm -n tbx-translator -v "$VERSION" -C "$PKG_ROOT" \
     -p "$RELEASE_DIR/TBX-Translator-Fedora-x86_64.rpm" \
-    --license "CC-BY-NC-SA-4.0" --depends gtk4 opt usr
+    --license "CC-BY-NC-SA-4.0" opt usr
 fpm -s dir -t pacman -n tbx-translator -v "$VERSION" -C "$PKG_ROOT" \
     -p "$RELEASE_DIR/TBX-Translator-Arch-x86_64.pkg.tar.zst" \
-    --license "CC-BY-NC-SA-4.0" --depends gtk4 opt usr
+    --license "CC-BY-NC-SA-4.0" opt usr
 
 echo "==> Criando AppImage"
 mkdir -p "$APPIMAGE_DIR/usr/bin"

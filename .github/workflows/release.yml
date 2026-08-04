@@ -35,8 +35,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Install GTK4 and packaging tools
-        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev ruby-full libarchive-tools
+      - name: Install packaging tools
+        run: sudo apt-get update && sudo apt-get install -y ruby-full libarchive-tools
       - name: Create Linux release packages
         run: cargo package-linux
       - uses: actions/upload-artifact@v4
@@ -64,7 +64,6 @@ jobs:
           msystem: MINGW64
           update: true
           install: >-
-            mingw-w64-x86_64-gtk4
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-pkgconf
             mingw-w64-x86_64-rust
@@ -78,7 +77,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: TBX-Translator-Windows-x64
-          path: release/TBX-Translator-Setup.exe
+          path: |
+            release/TBX-Translator-Windows-x64.zip
+            release/TBX-Translator-Setup.exe
 
   publish:
     name: Publish GitHub release
@@ -101,7 +102,8 @@ jobs:
 
             ### Downloads
 
-            - **Windows:** `TBX-Translator-Setup.exe`
+            - **Windows (Portátil .zip):** `TBX-Translator-Windows-x64.zip`
+            - **Windows (Instalador):** `TBX-Translator-Setup.exe`
             - **Debian / Ubuntu:** `TBX-Translator-Debian-Ubuntu-amd64.deb`
             - **Fedora:** `TBX-Translator-Fedora-x86_64.rpm`
             - **Arch Linux:** `TBX-Translator-Arch-x86_64.pkg.tar.zst`
@@ -121,4 +123,5 @@ jobs:
             release-artifacts/**/*.rpm
             release-artifacts/**/*.pkg.tar.zst
             release-artifacts/**/*.AppImage
+            release-artifacts/**/*.zip
             release-artifacts/**/*.exe

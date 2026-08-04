@@ -1,23 +1,74 @@
-# Build outputs
-/target/
-/release/
-/unity_static_extractor/bin/
-/unity_static_extractor/obj/
-
-# IDEs and operating system files
-.idea/
-.vscode/
-*.swp
-.DS_Store
-
-# Logs and local application settings
+# Logs
 *.log
 logs/
-.tbx-translator/
-config.properties
 
-# Temporary files generated while processing games
+# Rust / Cargo
+/target/
+Cargo.lock
+
+
+# backups
+/backups/
+*.bak
+*.backup
+*.old
+
+# Node.js (leftover from Tauri phase — no longer used)
+node_modules/
+dist/
+dist-ssr/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE / Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.sw?
+.DS_Store
+
+
+# Config persistente local do app (não vazar configs pessoais)
+config.properties
+.tpg-translator/
+
+# Java / Maven (leftover — no longer used)
+*.class
+*.jar
+*.war
+*.ear
+*.iml
+.mvn/
+mvnw
+mvnw.cmd
+pom.xml
+build_java.py
+fix_dumper.py
+test_write.txt
+
+# .NET / C#
+bin/
+obj/
+**/bin/
+**/obj/
+
+# Python
+__pycache__/
+*.pyc
+
+# Releases
+/release/
+
+# Assets temporários do dump do Ren'Py
 tpg_temp/
+tpg_temp_fonts/
 dump.txt
 tpg_boot.rpyc
 tpg_dumper.rpyc

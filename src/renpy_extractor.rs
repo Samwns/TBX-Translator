@@ -230,8 +230,8 @@ pub async fn extract_texts(
 }
 
 pub fn spawn_renpy_hidden(executable: &str) -> std::io::Result<std::process::Child> {
-    use std::process::{Command, Stdio};
-    Command::new(executable)
+    use std::process::Stdio;
+    crate::paths::hidden_command(executable)
         .env("RENPY_DISABLE_SOUND", "1")
         .env("RENPY_SKIP_SPLASHSCREEN", "1")
         .env("RENPY_RENDERER", "sw")

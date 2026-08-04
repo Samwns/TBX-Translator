@@ -1,24 +1,12 @@
-# TBX Translator - Release Notes
+# TPG Translator - Release Notes
 
 **Creator:** samwns  
-**Project:** TBX Translator  
-**License:** Non-commercial source-available
+**Project:** TPG Translator  
+**License:** Private
 
 ---
 
-## Release 0.0.1-alpha — Windows GTK4 Package
-
-**Status:** Alpha
-
-**Target Platform:** Windows x64  
-**Framework:** GTK4 via MSYS2
-
-The `Release Windows` GitHub Actions workflow produces a portable ZIP. Extract
-it anywhere and run `tbx-translator.exe`; keep all included files and folders
-next to the executable. The Unity extractor is bundled self-contained, so it
-does not require the .NET SDK.
-
-## Release 2.0.0 — Rust/GTK4 Native Port
+## Release 2.0.0 — Rust/GTK4 Native Port (Current)
 
 **Status:** In Development  
 **Target Platform:** Linux (Fedora/Arch/Debian)  
@@ -45,7 +33,7 @@ sudo pacman -S gtk4
 ### Building and Running
 ```bash
 cargo build --release
-./target/release/tbx-translator
+./target/release/tpg-translator
 ```
 
 Or in development mode:

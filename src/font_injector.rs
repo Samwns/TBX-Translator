@@ -31,6 +31,7 @@ pub fn show_font_window(parent: &gtk::ApplicationWindow, game_path: String, engi
         .transient_for(parent)
         .decorated(false)
         .build();
+    crate::ui::apply_windows_native_styling(&win);
     win.add_css_class("main-transparent");
     
     let shell = Box::new(Orientation::Vertical, 0);
@@ -799,9 +800,9 @@ fn scan_unity_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
     
     let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
     let mut command = if packaged.is_file() {
-        std::process::Command::new(packaged)
+        crate::paths::hidden_command(packaged)
     } else {
-        let mut command = std::process::Command::new("dotnet");
+        let mut command = crate::paths::hidden_command("dotnet");
         command.arg("run").arg("--");
         command
     };
@@ -852,9 +853,9 @@ fn inject_unity_individual(game_path_str: &str, user_font_path: &Path, target_in
     
     let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
     let mut command = if packaged.is_file() {
-        std::process::Command::new(packaged)
+        crate::paths::hidden_command(packaged)
     } else {
-        let mut command = std::process::Command::new("dotnet");
+        let mut command = crate::paths::hidden_command("dotnet");
         command.arg("run").arg("--");
         command
     };
@@ -893,9 +894,9 @@ fn export_unity_original_font(game_path_str: &str, target_internal_path: &str) -
     let script_path = crate::paths::app_root().join("unity_static_extractor");
     let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
     let mut command = if packaged.is_file() {
-        std::process::Command::new(packaged)
+        crate::paths::hidden_command(packaged)
     } else {
-        let mut command = std::process::Command::new("dotnet");
+        let mut command = crate::paths::hidden_command("dotnet");
         command.arg("run").arg("--");
         command
     };
@@ -917,8 +918,8 @@ fn export_tmp_atlas_preview(game_path_str: &str, asset_path: &str, path_id: &str
     let output_dir = base_dir.join("tpg_temp_fonts");
     let script_path = crate::paths::app_root().join("unity_static_extractor");
     let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
-    let mut command = if packaged.is_file() { std::process::Command::new(packaged) } else {
-        let mut command = std::process::Command::new("dotnet"); command.arg("run").arg("--"); command
+    let mut command = if packaged.is_file() { crate::paths::hidden_command(packaged) } else {
+        let mut command = crate::paths::hidden_command("dotnet"); command.arg("run").arg("--"); command
     };
     let output = command.arg("tmp-atlas-export").arg(&base_dir).arg(asset_path).arg(path_id).arg(&output_dir)
         .current_dir(&script_path).output().map_err(|e| format!("Falha ao chamar UABEA: {e}"))?;

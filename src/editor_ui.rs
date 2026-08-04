@@ -23,6 +23,7 @@ pub fn show_editor(app: &Application, folder: PathBuf) {
         .default_width(900)
         .default_height(600)
         .build();
+    crate::ui::apply_windows_native_styling(&window);
     window.add_css_class("editor-window");
 
     let main_box = Box::new(Orientation::Horizontal, 0);
