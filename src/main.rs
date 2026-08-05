@@ -1,3 +1,4 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 // TBX Translator - main.rs
 // Creator: samwns
 // Pure Rust Cross-Platform Entry Point
