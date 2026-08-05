@@ -25,9 +25,9 @@ pub async fn extract_texts(
     target_lang: &str,
     keep_structure: bool,
     translate_character_names: bool,
-    threads: u32,
+    _threads: u32,
     api_engine: &str,
-    tx: gtk4::glib::Sender<UiMsg>,
+    tx: std::sync::mpsc::Sender<UiMsg>,
     cancelled: Arc<AtomicBool>,
     overwrite: bool,
 ) -> Result<(), String> {
@@ -108,7 +108,7 @@ pub async fn extract_texts(
 
     for (text, file, kind) in candidates {
         if kind != "interface" {
-            if let Some(reason) = filter_reason(&text) {
+            if let Some(_reason) = filter_reason(&text) {
                 continue;
             }
         }

@@ -54,7 +54,7 @@ fn extract_with_unitypy(
     data_dir: &Path,
     extractor_dir: &Path,
     output_json: &Path,
-    tx: &gtk4::glib::Sender<UiMsg>,
+    tx: &std::sync::mpsc::Sender<UiMsg>,
 ) -> Result<Option<Vec<String>>, String> {
     let script = extractor_dir.join("unitypy_extract.py");
     if !script.is_file() {
@@ -107,7 +107,7 @@ pub async fn extract_texts(
     target_lang: &str,
     _threads: u32,
     _api_engine: &str,
-    tx: gtk4::glib::Sender<UiMsg>,
+    tx: std::sync::mpsc::Sender<UiMsg>,
     cancelled: Arc<AtomicBool>,
     _overwrite: bool,
 ) -> Result<(), String> {
@@ -354,7 +354,7 @@ pub async fn inject_texts(
     executable: &str,
     translation_folder: &str,
     target_lang: &str,
-    tx: gtk4::glib::Sender<UiMsg>,
+    tx: std::sync::mpsc::Sender<UiMsg>,
 ) -> Result<(), String> {
     
     let backend = detect_unity_backend(executable).unwrap_or("Desconhecido");

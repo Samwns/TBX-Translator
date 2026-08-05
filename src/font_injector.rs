@@ -1,467 +1,453 @@
-use gtk4 as gtk;
-use gtk::prelude::*;
-use std::path::{Path, PathBuf};
+// TBX Translator - font_injector.rs
+// Creator: samwns
+// Pure Rust Font Injector & Preview using rusttype + eframe/egui
+
+use std::collections::HashMap;
 use std::fs;
-use gtk::{ApplicationWindow, Box, Button, Entry, FileChooserNative, FileChooserAction, ResponseType, Label, Orientation, Stack, ListBox, ListBoxRow, ScrolledWindow, Picture};
-use rusttype::{Font, Scale, point};
+use std::path::{Path, PathBuf};
+use std::sync::mpsc::{channel, Receiver};
 use std::thread;
-use serde_json;
 
-pub fn show_font_window(parent: &gtk::ApplicationWindow, game_path: String, engine_mode: u32, lang: String) {
-    if game_path.is_empty() {
-        let dialog = gtk::MessageDialog::new(
-            Some(parent),
-            gtk::DialogFlags::MODAL,
-            gtk::MessageType::Error,
-            gtk::ButtonsType::Ok,
-            crate::i18n::t("erro_sem_pasta", &lang)
-        );
-        dialog.connect_response(|d, _| d.destroy());
-        dialog.show();
-        return;
-    }
+use egui::{Color32, ColorImage, Context, TextureHandle, TextureOptions, Ui, Vec2};
+use rusttype::{point, Font, Scale};
 
-    let win = ApplicationWindow::builder()
-        .title(crate::i18n::t("janela_fonte_titulo", &lang))
-        .default_width(600)
-        .default_height(500)
-        .modal(true)
-        .transient_for(parent)
-        .decorated(false)
-        .build();
-    crate::ui::apply_windows_native_styling(&win);
-    win.add_css_class("main-transparent");
-    
-    let shell = Box::new(Orientation::Vertical, 0);
-    shell.add_css_class("app-shell");
-
-    // Title bar
-    let title_bar = Box::new(Orientation::Horizontal, 12);
-    title_bar.add_css_class("title-bar");
-
-    let title_vbox = Box::new(Orientation::Vertical, 3);
-    let app_title_lbl = Label::new(Some(&crate::i18n::t("janela_fonte_titulo", &lang)));
-    app_title_lbl.add_css_class("app-title");
-    app_title_lbl.set_halign(gtk::Align::Start);
-    let title_line = Box::new(Orientation::Horizontal, 0);
-    title_line.add_css_class("title-underline");
-    title_line.set_size_request(130, 2);
-    title_vbox.append(&app_title_lbl);
-    title_vbox.append(&title_line);
-
-    let spacer = Box::new(Orientation::Horizontal, 0);
-    spacer.set_hexpand(true);
-
-    let win_btns = Box::new(Orientation::Horizontal, 2);
-    let btn_min = Button::with_label("—");
-    btn_min.add_css_class("btn-win"); btn_min.add_css_class("btn-win-min");
-    let btn_close = Button::with_label("✕");
-    btn_close.add_css_class("btn-win"); btn_close.add_css_class("btn-win-close");
-    win_btns.append(&btn_min); win_btns.append(&btn_close);
-
-    let win_min = win.clone();
-    btn_min.connect_clicked(move |_| { win_min.minimize(); });
-    
-    let win_close = win.clone();
-    btn_close.connect_clicked(move |_| { win_close.close(); });
-
-    title_bar.append(&title_vbox);
-    title_bar.append(&spacer);
-    title_bar.append(&win_btns);
-
-    let window_handle = gtk::WindowHandle::new();
-    window_handle.set_child(Some(&title_bar));
-    shell.append(&window_handle);
-
-    let root = Box::new(Orientation::Vertical, 15);
-    root.set_margin_top(20); root.set_margin_bottom(20);
-    root.set_margin_start(20); root.set_margin_end(20);
-    shell.append(&root);
-
-    let engine_bar = Box::new(Orientation::Horizontal, 0);
-    engine_bar.add_css_class("engine-bar");
-    
-    let mk_engine_btn = |label: &str, icon_path: &str| {
-        let b = Button::new();
-        let bx = Box::new(Orientation::Horizontal, 8);
-        bx.set_halign(gtk::Align::Center);
-        bx.set_valign(gtk::Align::Center);
-        let img = gtk::Image::from_file(icon_path);
-        img.set_pixel_size(18);
-        let lbl = Label::new(Some(label));
-        bx.append(&img);
-        bx.append(&lbl);
-        b.set_child(Some(&bx));
-        b.add_css_class("game-tab-btn");
-        b
-    };
-    let btn_renpy_tab = mk_engine_btn("Ren'Py", "assets/renpy_icon.svg");
-    let btn_unity_tab = mk_engine_btn("Unity", "assets/unity_icon.svg");
-    engine_bar.append(&btn_renpy_tab);
-    engine_bar.append(&btn_unity_tab);
-    root.append(&engine_bar);
-
-    let stack = Stack::new();
-    stack.set_transition_type(gtk::StackTransitionType::Crossfade);
-    root.append(&stack);
-
-    // ==========================================
-    // REN'PY PAGE
-    // ==========================================
-    let page_renpy = Box::new(Orientation::Vertical, 10);
-    
-    let btn_scan = Button::with_label("Escanear Fontes do Jogo");
-    btn_scan.add_css_class("suggested-action");
-    page_renpy.append(&btn_scan);
-    
-    let list_fonts = ListBox::new();
-    list_fonts.set_selection_mode(gtk::SelectionMode::None);
-    list_fonts.add_css_class("boxed-list");
-    
-    let scroll_renpy = ScrolledWindow::new();
-    scroll_renpy.set_child(Some(&list_fonts));
-    scroll_renpy.set_min_content_height(200);
-    scroll_renpy.set_vexpand(true);
-    page_renpy.append(&scroll_renpy);
-
-    stack.add_named(&page_renpy, Some("renpy"));
-
-    let win_scan = win.clone();
-    let btn_scan_clone = btn_scan.clone();
-    let game_path_renpy = game_path.clone();
-    btn_scan.connect_clicked(move |_| {
-        btn_scan_clone.set_sensitive(false);
-        btn_scan_clone.set_label("Escaneando (Isso pode demorar alguns segundos)...");
-        let list_fonts_inner = list_fonts.clone();
-        let win_inner = win_scan.clone();
-        let gp = game_path_renpy.clone();
-        let gp_thread = game_path_renpy.clone();
-        let b = btn_scan_clone.clone();
-
-        let (sender, receiver) = gtk::glib::MainContext::channel(gtk::glib::Priority::DEFAULT);
-        
-        receiver.attach(
-            None,
-            move |fonts: Result<Vec<String>, String>| {
-                b.set_sensitive(true);
-                b.set_label("Escanear Novamente");
-
-                while let Some(row) = list_fonts_inner.first_child() {
-                    list_fonts_inner.remove(&row);
-                }
-
-                match fonts {
-                    Ok(f_list) => {
-                        if f_list.is_empty() {
-                            let lbl = Label::new(Some("Nenhuma fonte encontrada."));
-                            lbl.set_margin_top(10); lbl.set_margin_bottom(10);
-                            list_fonts_inner.append(&lbl);
-                        } else {
-                            for f in f_list {
-                                let row = create_font_row(&f, &gp, &win_inner);
-                                list_fonts_inner.append(&row);
-                            }
-                        }
-                    },
-                    Err(e) => {
-                        let dialog = gtk::MessageDialog::new(
-                            Some(&win_inner),
-                            gtk::DialogFlags::MODAL,
-                            gtk::MessageType::Error,
-                            gtk::ButtonsType::Ok,
-                            &format!("Erro ao escanear fontes: {}", e)
-                        );
-                        dialog.connect_response(|d, _| d.destroy());
-                        dialog.show();
-                    }
-                }
-                gtk::glib::ControlFlow::Break
-            }
-        );
-
-        thread::spawn(move || {
-            let fonts = scan_renpy_fonts(&gp_thread);
-            let _ = sender.send(fonts);
-        });
-    });
-
-    // ==========================================
-    // UNITY PAGE
-    // ==========================================
-    let page_unity = Box::new(Orientation::Vertical, 10);
-    
-    let btn_scan_unity = Button::with_label("Escanear Fontes do Jogo (Unity)");
-    btn_scan_unity.add_css_class("suggested-action");
-    page_unity.append(&btn_scan_unity);
-    
-    let list_fonts_unity = ListBox::new();
-    list_fonts_unity.set_selection_mode(gtk::SelectionMode::None);
-    list_fonts_unity.add_css_class("boxed-list");
-    
-    let scroll_unity = ScrolledWindow::new();
-    scroll_unity.set_child(Some(&list_fonts_unity));
-    scroll_unity.set_min_content_height(200);
-    scroll_unity.set_vexpand(true);
-    page_unity.append(&scroll_unity);
-
-    stack.add_named(&page_unity, Some("unity"));
-
-    let win_scan_unity = win.clone();
-    let btn_scan_unity_clone = btn_scan_unity.clone();
-    let game_path_unity = game_path.clone();
-    btn_scan_unity.connect_clicked(move |_| {
-        btn_scan_unity_clone.set_sensitive(false);
-        btn_scan_unity_clone.set_label("Escaneando Fontes (Unity)...");
-        let list_fonts_inner = list_fonts_unity.clone();
-        let win_inner = win_scan_unity.clone();
-        let gp = game_path_unity.clone();
-        let gp_thread = game_path_unity.clone();
-        let b = btn_scan_unity_clone.clone();
-
-        let (sender, receiver) = gtk::glib::MainContext::channel(gtk::glib::Priority::DEFAULT);
-        
-        receiver.attach(
-            None,
-            move |fonts: Result<Vec<String>, String>| {
-                b.set_sensitive(true);
-                b.set_label("Escanear Novamente (Unity)");
-
-                while let Some(row) = list_fonts_inner.first_child() {
-                    list_fonts_inner.remove(&row);
-                }
-
-                match fonts {
-                    Ok(f_list) => {
-                        if f_list.is_empty() {
-                            let lbl = Label::new(Some("Nenhuma fonte TTF/OTF embutida encontrada. Fontes TextMeshPro (SDF) não podem receber um .ttf diretamente; use a fonte original ou um asset bundle TMP."));
-                            lbl.set_wrap(true);
-                            lbl.set_margin_top(10); lbl.set_margin_bottom(10);
-                            list_fonts_inner.append(&lbl);
-                        } else {
-                            for f in f_list {
-                                let row = create_font_row_unity(&f, &gp, &win_inner);
-                                list_fonts_inner.append(&row);
-                            }
-                        }
-                    },
-                    Err(e) => {
-                        let dialog = gtk::MessageDialog::new(
-                            Some(&win_inner),
-                            gtk::DialogFlags::MODAL,
-                            gtk::MessageType::Error,
-                            gtk::ButtonsType::Ok,
-                            &format!("Erro ao escanear fontes Unity: {}", e)
-                        );
-                        dialog.connect_response(|d, _| d.destroy());
-                        dialog.show();
-                    }
-                }
-                gtk::glib::ControlFlow::Break
-            }
-        );
-
-        thread::spawn(move || {
-            let fonts = scan_unity_fonts(&gp_thread);
-            let _ = sender.send(fonts);
-        });
-    });
-
-    // Connect Engine Buttons
-    let stack_clone1 = stack.clone();
-    let tu1 = btn_unity_tab.clone();
-    btn_renpy_tab.connect_clicked(move |btn| {
-        btn.add_css_class("active-renpy"); btn.remove_css_class("active-unity");
-        tu1.remove_css_class("active-renpy"); tu1.remove_css_class("active-unity");
-        stack_clone1.set_visible_child_name("renpy");
-    });
-
-    let stack_clone2 = stack.clone();
-    let tr2 = btn_renpy_tab.clone();
-    btn_unity_tab.connect_clicked(move |btn| {
-        btn.remove_css_class("active-renpy"); btn.add_css_class("active-unity");
-        tr2.remove_css_class("active-renpy"); tr2.remove_css_class("active-unity");
-        stack_clone2.set_visible_child_name("unity");
-    });
-
-    if engine_mode == 0 {
-        btn_renpy_tab.emit_clicked();
-    } else {
-        btn_unity_tab.emit_clicked();
-    }
-
-    win.set_child(Some(&shell));
-    win.show();
+pub struct FontInjectorState {
+    pub engine_tab: usize, // 0 = Ren'Py, 1 = Unity
+    pub is_scanning: bool,
+    pub renpy_fonts: Vec<String>,
+    pub unity_fonts: Vec<String>,
+    pub test_texts: HashMap<String, String>,
+    pub textures: HashMap<String, (String, TextureHandle)>,
+    pub unity_atlas_textures: HashMap<String, TextureHandle>,
+    pub status_message: Option<(bool, String)>, // (is_error, message)
+    rx: Option<Receiver<ScanResult>>,
 }
 
-fn create_font_row(font_internal_path: &str, game_path: &str, parent_win: &ApplicationWindow) -> ListBoxRow {
-    let row = ListBoxRow::new();
-    let bx_v = Box::new(Orientation::Vertical, 5);
-    bx_v.set_margin_top(8); bx_v.set_margin_bottom(8);
-    bx_v.set_margin_start(10); bx_v.set_margin_end(10);
+enum ScanResult {
+    Renpy(Result<Vec<String>, String>),
+    Unity(Result<Vec<String>, String>),
+}
 
-    let lbl = Label::new(Some(font_internal_path));
-    lbl.set_hexpand(true);
-    lbl.set_halign(gtk::Align::Start);
-    
-    let btn_replace = Button::with_label("Substituir");
-    
-    let bx_h = Box::new(Orientation::Horizontal, 10);
-    bx_h.append(&lbl);
-    bx_h.append(&btn_replace);
-    bx_v.append(&bx_h);
-
-    let entry_test = Entry::new();
-    entry_test.set_placeholder_text(Some("Digite aqui para testar a fonte original..."));
-    entry_test.set_hexpand(true);
-    
-    let font_file_name = Path::new(font_internal_path).file_name().and_then(|s| s.to_str()).unwrap_or("");
-    let mut base_dir = PathBuf::from(game_path);
-    if base_dir.is_file() {
-        if let Some(p) = base_dir.parent() {
-            base_dir = p.to_path_buf();
+impl Default for FontInjectorState {
+    fn default() -> Self {
+        Self {
+            engine_tab: 0,
+            is_scanning: false,
+            renpy_fonts: Vec::new(),
+            unity_fonts: Vec::new(),
+            test_texts: HashMap::new(),
+            textures: HashMap::new(),
+            unity_atlas_textures: HashMap::new(),
+            status_message: None,
+            rx: None,
         }
     }
-    let dumped_font_path = base_dir.join("game").join("tpg_temp_fonts").join(font_file_name);
-    
-    if dumped_font_path.exists() {
-        if let Ok(font_data) = std::fs::read(&dumped_font_path) {
-            let pic = Picture::new();
-            pic.set_halign(gtk::Align::Start);
-            pic.set_margin_top(5);
-            pic.add_css_class("font-pic-outline");
-            
-            let pic_clone = pic.clone();
-            entry_test.connect_changed(move |e| {
-                let text = e.text();
-                if text.is_empty() {
-                    pic_clone.set_paintable(None::<&gtk::gdk::Paintable>);
-                    return;
+}
+
+impl FontInjectorState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn set_engine_mode(&mut self, mode: u32) {
+        self.engine_tab = if mode == 1 { 1 } else { 0 };
+    }
+
+    pub fn check_async_messages(&mut self, ctx: &Context) {
+        if let Some(rx) = &self.rx {
+            while let Ok(msg) = rx.try_recv() {
+                self.is_scanning = false;
+                match msg {
+                    ScanResult::Renpy(Ok(fonts)) => {
+                        self.renpy_fonts = fonts;
+                        self.status_message = None;
+                    }
+                    ScanResult::Renpy(Err(err)) => {
+                        self.status_message = Some((true, format!("Erro ao escanear fontes Ren'Py: {}", err)));
+                    }
+                    ScanResult::Unity(Ok(fonts)) => {
+                        self.unity_fonts = fonts;
+                        self.status_message = None;
+                    }
+                    ScanResult::Unity(Err(err)) => {
+                        self.status_message = Some((true, format!("Erro ao escanear fontes Unity: {}", err)));
+                    }
                 }
-                
-                if let Some(font) = Font::try_from_vec(font_data.clone()) {
-                    let scale = Scale::uniform(32.0);
-                    let v_metrics = font.v_metrics(scale);
-                    
-                    let glyphs: Vec<_> = font.layout(&text, scale, point(0.0, v_metrics.ascent)).collect();
-                    let width = glyphs.iter().map(|g| g.position().x + g.unpositioned().h_metrics().advance_width).last().unwrap_or(0.0).ceil() as u32;
-                    let height = (v_metrics.ascent - v_metrics.descent).ceil() as u32;
-                    
-                    println!("Font loaded correctly! Text length: {}, Width: {}, Height: {}", text.len(), width, height);
-                    
-                    let width = width.max(1);
-                    let height = height.max(1);
-                    
-                    let mut img_data = vec![0u8; (width * height * 4) as usize];
-                    let mut drew_anything = false;
-                    for g in glyphs {
-                        if let Some(bb) = g.pixel_bounding_box() {
-                            g.draw(|x, y, v| {
-                                let px = x as i32 + bb.min.x;
-                                let py = y as i32 + bb.min.y;
-                                if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
-                                    let idx = ((py * width as i32 + px) * 4) as usize;
-                                    let alpha = (v * 255.0) as u8;
-                                    if alpha > 0 { drew_anything = true; }
-                                    img_data[idx] = 255;
-                                    img_data[idx + 1] = 255;
-                                    img_data[idx + 2] = 255;
-                                    img_data[idx + 3] = img_data[idx + 3].max(alpha);
+                ctx.request_repaint();
+            }
+        }
+    }
+
+    pub fn start_scan_renpy(&mut self, game_path: String) {
+        self.is_scanning = true;
+        self.status_message = None;
+        let (tx, rx) = channel();
+        self.rx = Some(rx);
+
+        thread::spawn(move || {
+            let res = scan_renpy_fonts(&game_path);
+            let _ = tx.send(ScanResult::Renpy(res));
+        });
+    }
+
+    pub fn start_scan_unity(&mut self, game_path: String) {
+        self.is_scanning = true;
+        self.status_message = None;
+        let (tx, rx) = channel();
+        self.rx = Some(rx);
+
+        thread::spawn(move || {
+            let res = scan_unity_fonts(&game_path);
+            let _ = tx.send(ScanResult::Unity(res));
+        });
+    }
+
+    pub fn render_ui(&mut self, ui: &mut Ui, ctx: &Context, game_path: &str, lang: &str) {
+        self.check_async_messages(ctx);
+
+        if game_path.trim().is_empty() {
+            ui.vertical_centered(|ui| {
+                ui.add_space(20.0);
+                ui.colored_label(Color32::from_rgb(243, 139, 168), crate::i18n::t("erro_sem_pasta", lang));
+            });
+            return;
+        }
+
+        // Header and Engine Tabs
+        ui.horizontal(|ui| {
+            let renpy_active = self.engine_tab == 0;
+            let unity_active = self.engine_tab == 1;
+
+            let renpy_btn = egui::Button::new(
+                egui::RichText::new("Ren'Py")
+                    .color(if renpy_active { Color32::from_rgb(249, 226, 175) } else { Color32::from_rgb(166, 173, 200) })
+                    .strong()
+            ).fill(if renpy_active { Color32::from_rgb(49, 50, 68) } else { Color32::from_rgb(17, 17, 27) });
+
+            if ui.add(renpy_btn).clicked() {
+                self.engine_tab = 0;
+                self.status_message = None;
+            }
+
+            let unity_btn = egui::Button::new(
+                egui::RichText::new("Unity")
+                    .color(if unity_active { Color32::from_rgb(137, 180, 250) } else { Color32::from_rgb(166, 173, 200) })
+                    .strong()
+            ).fill(if unity_active { Color32::from_rgb(49, 50, 68) } else { Color32::from_rgb(17, 17, 27) });
+
+            if ui.add(unity_btn).clicked() {
+                self.engine_tab = 1;
+                self.status_message = None;
+            }
+        });
+
+        ui.add_space(8.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        if let Some((is_err, msg)) = &self.status_message {
+            let col = if *is_err { Color32::from_rgb(243, 139, 168) } else { Color32::from_rgb(166, 227, 161) };
+            ui.label(egui::RichText::new(msg).color(col).strong());
+            ui.add_space(6.0);
+        }
+
+        if self.engine_tab == 0 {
+            self.render_renpy_tab(ui, ctx, game_path);
+        } else {
+            self.render_unity_tab(ui, ctx, game_path);
+        }
+    }
+
+    fn render_renpy_tab(&mut self, ui: &mut Ui, ctx: &Context, game_path: &str) {
+        ui.horizontal(|ui| {
+            let scan_label = if self.is_scanning {
+                "⏳ Escaneando fontes (aguarde)..."
+            } else if self.renpy_fonts.is_empty() {
+                "🔍 Escanear Fontes do Jogo"
+            } else {
+                "🔄 Escanear Novamente"
+            };
+
+            let btn = egui::Button::new(egui::RichText::new(scan_label).color(Color32::from_rgb(17, 17, 27)).strong())
+                .fill(Color32::from_rgb(166, 227, 161));
+
+            if ui.add_enabled(!self.is_scanning, btn).clicked() {
+                self.start_scan_renpy(game_path.to_string());
+            }
+        });
+
+        ui.add_space(8.0);
+
+        let fonts = self.renpy_fonts.clone();
+
+        egui::ScrollArea::vertical().id_salt("renpy_fonts_scroll").show(ui, |ui| {
+            if fonts.is_empty() && !self.is_scanning {
+                ui.label(egui::RichText::new("Nenhuma fonte escaneada ainda. Clique no botão acima para listar as fontes embutidas.").color(Color32::from_rgb(166, 173, 200)));
+            } else {
+                let mut action_to_perform: Option<(String, PathBuf)> = None;
+
+                for font_path in &fonts {
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(font_path).color(Color32::WHITE).strong());
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                let btn = egui::Button::new(egui::RichText::new("Substituir").color(Color32::from_rgb(17, 17, 27)).strong())
+                                    .fill(Color32::from_rgb(137, 180, 250));
+                                if ui.add(btn).clicked() {
+                                    if let Some(file) = rfd::FileDialog::new()
+                                        .set_title("Selecione a Nova Fonte")
+                                        .add_filter("Fontes (*.ttf, *.otf)", &["ttf", "otf"])
+                                        .pick_file()
+                                    {
+                                        action_to_perform = Some((font_path.clone(), file));
+                                    }
                                 }
                             });
+                        });
+
+                        // Interactive font preview
+                        let current_text = self.test_texts.entry(font_path.clone()).or_insert_with(|| "Prévia da fonte original: Áá Çç 123".to_string());
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Teste:").color(Color32::from_rgb(203, 166, 247)));
+                            ui.text_edit_singleline(current_text);
+                        });
+
+                        // Render preview image
+                        let font_file_name = Path::new(font_path).file_name().and_then(|s| s.to_str()).unwrap_or("");
+                        let mut base_dir = PathBuf::from(game_path);
+                        if base_dir.is_file() {
+                            if let Some(p) = base_dir.parent() {
+                                base_dir = p.to_path_buf();
+                            }
                         }
-                    }
-                    
-                    println!("Drew anything? {}", drew_anything);
-                    
-                    let bytes = gtk::glib::Bytes::from(&img_data);
-                    let texture = gtk::gdk::MemoryTexture::new(
-                        width as i32,
-                        height as i32,
-                        gtk::gdk::MemoryFormat::R8g8b8a8,
-                        &bytes,
-                        (width * 4) as usize
-                    );
-                    pic_clone.set_paintable(Some(&texture));
-                    pic_clone.set_size_request(width as i32, height as i32);
-                    println!("Paintable set!");
-                } else {
-                    println!("Failed to load font from bytes! Path: {}", dumped_font_path.display());
+                        let dumped_font_path = base_dir.join("game").join("tpg_temp_fonts").join(font_file_name);
+
+                        if dumped_font_path.exists() {
+                            let text_val = current_text.clone();
+                            let tex = self.get_or_create_preview_texture(ctx, font_path, &dumped_font_path, &text_val);
+                            if let Some(texture) = tex {
+                                ui.image((texture.id(), texture.size_vec2()));
+                            }
+                        }
+                    });
+                    ui.add_space(6.0);
                 }
-            });
-            
-            entry_test.set_text("Preview da fonte original");
-            
-            bx_v.append(&entry_test);
-            bx_v.append(&pic);
-        } else {
-            let lbl_err = Label::new(Some("Aviso: Falha ao ler o arquivo da fonte."));
-            lbl_err.add_css_class("muted-label");
-            lbl_err.set_halign(gtk::Align::Start);
-            bx_v.append(&lbl_err);
-        }
-    } else {
-        let lbl_err = Label::new(Some("Aviso: Não foi possível extrair a prévia desta fonte."));
-        lbl_err.add_css_class("muted-label");
-        lbl_err.set_halign(gtk::Align::Start);
-        bx_v.append(&lbl_err);
-    }
 
-    row.set_child(Some(&bx_v));
-
-    let f_path = font_internal_path.to_string();
-    let gp = game_path.to_string();
-    let win_inner = parent_win.clone();
-    
-    btn_replace.connect_clicked(move |_| {
-        let dialog = FileChooserNative::new(
-            Some("Selecione a Nova Fonte"),
-            Some(&win_inner),
-            FileChooserAction::Open,
-            Some("Substituir"),
-            Some("Cancelar"),
-        );
-
-        let filter = gtk::FileFilter::new();
-        filter.set_name(Some("Fontes (*.ttf, *.otf)"));
-        filter.add_pattern("*.ttf");
-        filter.add_pattern("*.otf");
-        dialog.add_filter(&filter);
-
-        let gp_clone = gp.clone();
-        let f_path_clone = f_path.clone();
-        let win_dialog = win_inner.clone();
-
-        dialog.connect_response(move |d, response| {
-            if response == ResponseType::Accept {
-                if let Some(file) = d.file() {
-                    if let Some(path) = file.path() {
-                        let res = inject_renpy_individual(&gp_clone, &path, &f_path_clone);
-                        let (msg_type, msg) = match res {
-                            Ok(_) => (gtk::MessageType::Info, format!("Fonte '{}' substituída com sucesso!", f_path_clone)),
-                            Err(e) => (gtk::MessageType::Error, e),
-                        };
-
-                        let msg_dialog = gtk::MessageDialog::new(
-                            Some(&win_dialog),
-                            gtk::DialogFlags::MODAL,
-                            msg_type,
-                            gtk::ButtonsType::Ok,
-                            &msg
-                        );
-                        msg_dialog.connect_response(|md, _| md.destroy());
-                        msg_dialog.show();
+                if let Some((target_font, new_font_file)) = action_to_perform {
+                    match inject_renpy_individual(game_path, &new_font_file, &target_font) {
+                        Ok(_) => {
+                            self.status_message = Some((false, format!("✅ Fonte '{}' substituída com sucesso!", target_font)));
+                        }
+                        Err(e) => {
+                            self.status_message = Some((true, format!("❌ Erro ao substituir fonte: {}", e)));
+                        }
                     }
                 }
             }
-            d.destroy();
         });
-        dialog.show();
-    });
+    }
 
-    row
+    fn render_unity_tab(&mut self, ui: &mut Ui, ctx: &Context, game_path: &str) {
+        ui.horizontal(|ui| {
+            let scan_label = if self.is_scanning {
+                "⏳ Escaneando fontes Unity (aguarde)..."
+            } else if self.unity_fonts.is_empty() {
+                "🔍 Escanear Fontes do Jogo (Unity)"
+            } else {
+                "🔄 Escanear Novamente (Unity)"
+            };
+
+            let btn = egui::Button::new(egui::RichText::new(scan_label).color(Color32::from_rgb(17, 17, 27)).strong())
+                .fill(Color32::from_rgb(137, 180, 250));
+
+            if ui.add_enabled(!self.is_scanning, btn).clicked() {
+                self.start_scan_unity(game_path.to_string());
+            }
+        });
+
+        ui.add_space(8.0);
+
+        let fonts = self.unity_fonts.clone();
+
+        egui::ScrollArea::vertical().id_salt("unity_fonts_scroll").show(ui, |ui| {
+            if fonts.is_empty() && !self.is_scanning {
+                ui.label(egui::RichText::new("Nenhuma fonte Unity escaneada. Clique no botão acima para buscar fontes nos arquivos .assets.").color(Color32::from_rgb(166, 173, 200)));
+            } else {
+                let mut action_replace: Option<(String, PathBuf)> = None;
+                let mut action_export: Option<String> = None;
+
+                for font_id in &fonts {
+                    let font_parts: Vec<&str> = font_id.splitn(4, '|').collect();
+                    let is_embedded = font_parts.len() == 4 && font_parts[0] == "EMBEDDED";
+                    let display_name = if font_parts.len() == 4 {
+                        let kind = if is_embedded { "TTF/OTF incorporada" } else { "TextMeshPro/SDF" };
+                        format!("{}  —  {} ({})", font_parts[2], font_parts[1], kind)
+                    } else {
+                        font_id.clone()
+                    };
+
+                    let f_path = if is_embedded {
+                        format!("{}|{}|{}", font_parts[1], font_parts[2], font_parts[3])
+                    } else {
+                        String::new()
+                    };
+
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(&display_name).color(Color32::WHITE).strong());
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if is_embedded {
+                                    let btn_rep = egui::Button::new(egui::RichText::new("Substituir").color(Color32::from_rgb(17, 17, 27)).strong())
+                                        .fill(Color32::from_rgb(166, 227, 161));
+                                    if ui.add(btn_rep).clicked() {
+                                        if let Some(file) = rfd::FileDialog::new()
+                                            .set_title("Selecione a Nova Fonte")
+                                            .add_filter("Fontes (*.ttf, *.otf)", &["ttf", "otf"])
+                                            .pick_file()
+                                        {
+                                            action_replace = Some((f_path.clone(), file));
+                                        }
+                                    }
+
+                                    let btn_ext = egui::Button::new(egui::RichText::new("Extrair original").color(Color32::from_rgb(17, 17, 27)).strong())
+                                        .fill(Color32::from_rgb(203, 166, 247));
+                                    if ui.add(btn_ext).clicked() {
+                                        action_export = Some(f_path.clone());
+                                    }
+                                } else {
+                                    ui.colored_label(Color32::from_rgb(166, 173, 200), "TMP / SDF (Atlas)");
+                                }
+                            });
+                        });
+
+                        if is_embedded {
+                            // Render preview for embedded TTF
+                            let current_text = self.test_texts.entry(font_id.clone()).or_insert_with(|| "Prévia Unity: Áá Çç 123".to_string());
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Teste:").color(Color32::from_rgb(203, 166, 247)));
+                                ui.text_edit_singleline(current_text);
+                            });
+
+                            if let Ok(extracted_path) = export_unity_original_font(game_path, &f_path) {
+                                let text_val = current_text.clone();
+                                let tex = self.get_or_create_preview_texture(ctx, font_id, &extracted_path, &text_val);
+                                if let Some(texture) = tex {
+                                    ui.image((texture.id(), texture.size_vec2()));
+                                }
+                            }
+                        } else if font_parts.len() == 4 {
+                            // TMP Atlas preview
+                            if let Some(tex) = self.get_or_create_tmp_atlas_texture(ctx, game_path, font_parts[1], font_parts[3]) {
+                                ui.label(egui::RichText::new("Prévia do Atlas TMP SDF:").color(Color32::from_rgb(166, 173, 200)));
+                                ui.image((tex.id(), Vec2::new(260.0, 120.0)));
+                            }
+                        }
+                    });
+                    ui.add_space(6.0);
+                }
+
+                if let Some((target_font, new_font_file)) = action_replace {
+                    match inject_unity_individual(game_path, &new_font_file, &target_font) {
+                        Ok(_) => {
+                            self.status_message = Some((false, "✅ Fonte Unity substituída com sucesso!".to_string()));
+                        }
+                        Err(e) => {
+                            self.status_message = Some((true, format!("❌ Erro ao substituir fonte Unity: {}", e)));
+                        }
+                    }
+                }
+
+                if let Some(target_font) = action_export {
+                    match export_unity_original_font(game_path, &target_font) {
+                        Ok(p) => {
+                            self.status_message = Some((false, format!("✅ Fonte original extraída em:\n{}", p.display())));
+                        }
+                        Err(e) => {
+                            self.status_message = Some((true, format!("❌ Erro ao extrair fonte Unity: {}", e)));
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    fn get_or_create_preview_texture(
+        &mut self,
+        ctx: &Context,
+        key: &str,
+        font_file: &Path,
+        text: &str,
+    ) -> Option<TextureHandle> {
+        if let Some((cached_text, handle)) = self.textures.get(key) {
+            if cached_text == text {
+                return Some(handle.clone());
+            }
+        }
+
+        let font_data = fs::read(font_file).ok()?;
+        let font = Font::try_from_vec(font_data)?;
+        let color_image = rasterize_text_preview(&font, text)?;
+        let handle = ctx.load_texture(format!("font_preview_{}", key), color_image, TextureOptions::LINEAR);
+        self.textures.insert(key.to_string(), (text.to_string(), handle.clone()));
+        Some(handle)
+    }
+
+    fn get_or_create_tmp_atlas_texture(
+        &mut self,
+        ctx: &Context,
+        game_path: &str,
+        asset_path: &str,
+        path_id: &str,
+    ) -> Option<TextureHandle> {
+        let key = format!("{}_{}", asset_path, path_id);
+        if let Some(handle) = self.unity_atlas_textures.get(&key) {
+            return Some(handle.clone());
+        }
+
+        let png_path = export_tmp_atlas_preview(game_path, asset_path, path_id).ok()?;
+        let img = image::open(&png_path).ok()?.to_rgba8();
+        let size = [img.width() as usize, img.height() as usize];
+        let pixels = img.into_raw();
+        let color_image = ColorImage::from_rgba_unmultiplied(size, &pixels);
+        let handle = ctx.load_texture(format!("tmp_atlas_{}", key), color_image, TextureOptions::LINEAR);
+        self.unity_atlas_textures.insert(key, handle.clone());
+        Some(handle)
+    }
 }
 
-fn scan_renpy_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
+fn rasterize_text_preview(font: &Font, text: &str) -> Option<ColorImage> {
+    if text.is_empty() {
+        return None;
+    }
+
+    let scale = Scale::uniform(28.0);
+    let v_metrics = font.v_metrics(scale);
+    let glyphs: Vec<_> = font.layout(text, scale, point(0.0, v_metrics.ascent)).collect();
+    let width = glyphs.iter().map(|g| g.position().x + g.unpositioned().h_metrics().advance_width).last().unwrap_or(0.0).ceil().max(1.0) as usize;
+    let height = (v_metrics.ascent - v_metrics.descent).ceil().max(1.0) as usize;
+
+    let mut img_data = vec![0u8; width * height * 4];
+    for g in glyphs {
+        if let Some(bb) = g.pixel_bounding_box() {
+            g.draw(|x, y, v| {
+                let px = x as i32 + bb.min.x;
+                let py = y as i32 + bb.min.y;
+                if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
+                    let idx = (py as usize * width + px as usize) * 4;
+                    let alpha = (v * 255.0) as u8;
+                    img_data[idx] = 255;
+                    img_data[idx + 1] = 255;
+                    img_data[idx + 2] = 255;
+                    img_data[idx + 3] = img_data[idx + 3].max(alpha);
+                }
+            });
+        }
+    }
+
+    Some(ColorImage::from_rgba_unmultiplied([width, height], &img_data))
+}
+
+pub fn scan_renpy_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
     let original_path = PathBuf::from(game_path_str);
     let mut base_dir = original_path.clone();
     let mut executable = original_path.clone();
@@ -478,9 +464,8 @@ fn scan_renpy_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
             executable = base_dir.join(name);
         }
     }
-    
+
     if !executable.exists() {
-        // Fallback: search for any .exe or executable if not found
         if let Ok(entries) = fs::read_dir(&base_dir) {
             for entry in entries.flatten() {
                 if let Ok(file_type) = entry.file_type() {
@@ -546,9 +531,9 @@ init 999 python:
 
     let mut proc = crate::renpy_extractor::spawn_renpy_hidden(&executable.to_string_lossy())
         .map_err(|e| format!("Falha ao iniciar Ren'Py: {}", e))?;
-    
+
     let _ = proc.wait();
-    
+
     let _ = fs::remove_file(&dumper_path);
     let _ = fs::remove_file(game_dir.join("tpg_font_dumper.rpyc"));
 
@@ -563,7 +548,7 @@ init 999 python:
     Ok(fonts)
 }
 
-fn inject_renpy_individual(game_path_str: &str, user_font_path: &Path, target_internal_path: &str) -> Result<(), String> {
+pub fn inject_renpy_individual(game_path_str: &str, user_font_path: &Path, target_internal_path: &str) -> Result<(), String> {
     let mut base_dir = PathBuf::from(game_path_str);
     if base_dir.is_file() {
         if let Some(p) = base_dir.parent() {
@@ -575,15 +560,12 @@ fn inject_renpy_individual(game_path_str: &str, user_font_path: &Path, target_in
         return Err("Pasta 'game' não encontrada.".to_string());
     }
 
-    // target_internal_path might be "gui/fonts/montserrat.ttf"
-    // we need to create "game/gui/fonts/" and copy there
     let target_full_path = game_dir.join(target_internal_path);
     if let Some(parent) = target_full_path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Falha ao criar diretório: {}", e))?;
     }
 
     if target_full_path.exists() {
-        // Backup original if it's not our backup already
         let backup_path = game_dir.join(format!("{}.tpg_backup", target_internal_path));
         if !backup_path.exists() {
             let _ = fs::copy(&target_full_path, &backup_path);
@@ -591,211 +573,18 @@ fn inject_renpy_individual(game_path_str: &str, user_font_path: &Path, target_in
     }
 
     fs::copy(user_font_path, &target_full_path).map_err(|e| format!("Falha ao copiar fonte: {}", e))?;
-
     Ok(())
 }
 
-fn append_font_preview(container: &Box, font_path: &Path) -> Result<(), String> {
-    let font_data = fs::read(font_path).map_err(|e| format!("Falha ao ler a fonte: {e}"))?;
-    if Font::try_from_vec(font_data.clone()).is_none() {
-        return Err("A fonte extraída não é um TTF/OTF compatível com a prévia.".into());
-    }
-    let entry = Entry::new();
-    entry.set_placeholder_text(Some("Digite para testar a fonte..."));
-    entry.set_hexpand(true);
-    let picture = Picture::new();
-    picture.set_halign(gtk::Align::Start);
-    picture.set_margin_top(5);
-    picture.add_css_class("font-pic-outline");
-    let picture_for_change = picture.clone();
-    entry.connect_changed(move |entry| {
-        let Some(font) = Font::try_from_vec(font_data.clone()) else { return; };
-        let text = entry.text();
-        if text.is_empty() { picture_for_change.set_paintable(None::<&gtk::gdk::Paintable>); return; }
-        let scale = Scale::uniform(30.0);
-        let metrics = font.v_metrics(scale);
-        let glyphs: Vec<_> = font.layout(&text, scale, point(0.0, metrics.ascent)).collect();
-        let width = glyphs.iter().map(|g| g.position().x + g.unpositioned().h_metrics().advance_width)
-            .last().unwrap_or(1.0).ceil().max(1.0) as u32;
-        let height = (metrics.ascent - metrics.descent).ceil().max(1.0) as u32;
-        let mut pixels = vec![0u8; (width * height * 4) as usize];
-        for glyph in glyphs {
-            if let Some(bb) = glyph.pixel_bounding_box() {
-                glyph.draw(|x, y, value| {
-                    let px = x as i32 + bb.min.x;
-                    let py = y as i32 + bb.min.y;
-                    if px >= 0 && px < width as i32 && py >= 0 && py < height as i32 {
-                        let i = ((py * width as i32 + px) * 4) as usize;
-                        pixels[i] = 255; pixels[i + 1] = 255; pixels[i + 2] = 255;
-                        pixels[i + 3] = pixels[i + 3].max((value * 255.0) as u8);
-                    }
-                });
-            }
-        }
-        let bytes = gtk::glib::Bytes::from(&pixels);
-        let texture = gtk::gdk::MemoryTexture::new(width as i32, height as i32,
-            gtk::gdk::MemoryFormat::R8g8b8a8, &bytes, (width * 4) as usize);
-        picture_for_change.set_paintable(Some(&texture));
-        picture_for_change.set_size_request(width as i32, height as i32);
-    });
-    entry.set_text("Prévia da fonte Unity: Áá Çç 123");
-    container.append(&entry);
-    container.append(&picture);
-    Ok(())
-}
-
-fn create_font_row_unity(font_id: &str, game_path: &str, parent_win: &ApplicationWindow) -> ListBoxRow {
-    let row = ListBoxRow::new();
-    let bx_v = Box::new(Orientation::Vertical, 5);
-    bx_v.set_margin_top(8); bx_v.set_margin_bottom(8);
-    bx_v.set_margin_start(10); bx_v.set_margin_end(10);
-
-    let font_parts = font_id
-        .splitn(4, '|')
-        .collect::<Vec<_>>();
-    let is_embedded = font_parts.len() == 4 && font_parts[0] == "EMBEDDED";
-    let display_name = if font_parts.len() == 4 {
-        let kind = if is_embedded { "TTF/OTF incorporada" } else { "TextMeshPro/SDF" };
-        format!("{}  —  {} ({})", font_parts[2], font_parts[1], kind)
-    } else {
-        font_id.to_string()
-    };
-    let lbl = Label::new(Some(&display_name));
-    lbl.set_hexpand(true);
-    lbl.set_halign(gtk::Align::Start);
-    
-    let btn_extract = Button::with_label("Extrair original");
-    let btn_replace = Button::with_label("Substituir");
-    if !is_embedded {
-        btn_extract.set_sensitive(false);
-        btn_replace.set_sensitive(false);
-        btn_extract.set_tooltip_text(Some("Fontes TMP/SDF usam atlas; não possuem um TTF/OTF extraível."));
-        btn_replace.set_tooltip_text(Some("Para trocar TMP/SDF é necessário um asset bundle TMP compatível."));
-    }
-    
-    let bx_h = Box::new(Orientation::Horizontal, 10);
-    bx_h.append(&lbl);
-    bx_h.append(&btn_extract);
-    bx_h.append(&btn_replace);
-    bx_v.append(&bx_h);
-
-    let f_path = if is_embedded {
-        format!("{}|{}|{}", font_parts[1], font_parts[2], font_parts[3])
-    } else { String::new() };
-    let gp = game_path.to_string();
-    let win_inner = parent_win.clone();
-
-    if is_embedded {
-        match export_unity_original_font(&gp, &f_path).and_then(|path| {
-            append_font_preview(&bx_v, &path).map(|_| path)
-        }) {
-            Ok(_) => {}
-            Err(error) => {
-                let status = Label::new(Some(&format!("Prévia indisponível: {error}")));
-                status.add_css_class("muted-label");
-                status.set_halign(gtk::Align::Start);
-                bx_v.append(&status);
-            }
-        }
-    } else {
-        match export_tmp_atlas_preview(&gp, font_parts[1], font_parts[3]) {
-            Ok(path) => {
-                let status = Label::new(Some("Prévia do atlas SDF usado pelo TextMeshPro:"));
-                status.add_css_class("muted-label");
-                status.set_halign(gtk::Align::Start);
-                let picture = Picture::for_filename(path);
-                picture.set_halign(gtk::Align::Start);
-                picture.set_size_request(260, 120);
-                bx_v.append(&status);
-                bx_v.append(&picture);
-            }
-            Err(error) => {
-                let status = Label::new(Some(&format!("Prévia do atlas indisponível: {error}")));
-                status.add_css_class("muted-label");
-                status.set_wrap(true);
-                status.set_halign(gtk::Align::Start);
-                bx_v.append(&status);
-            }
-        }
-    }
-
-    row.set_child(Some(&bx_v));
-
-    let export_path = f_path.clone();
-    let export_game = gp.clone();
-    let export_window = win_inner.clone();
-    btn_extract.connect_clicked(move |_| {
-        let result = export_unity_original_font(&export_game, &export_path);
-        let (kind, text) = match result {
-            Ok(path) => (gtk::MessageType::Info, format!("Fonte original extraída em:\n{}", path.display())),
-            Err(error) => (gtk::MessageType::Error, error),
-        };
-        let dialog = gtk::MessageDialog::new(
-            Some(&export_window), gtk::DialogFlags::MODAL, kind, gtk::ButtonsType::Ok, &text,
-        );
-        dialog.connect_response(|d, _| d.destroy());
-        dialog.show();
-    });
-    
-    btn_replace.connect_clicked(move |_| {
-        let dialog = FileChooserNative::new(
-            Some("Selecione a Nova Fonte"),
-            Some(&win_inner),
-            FileChooserAction::Open,
-            Some("Substituir"),
-            Some("Cancelar"),
-        );
-
-        let filter = gtk::FileFilter::new();
-        filter.set_name(Some("Fontes (*.ttf, *.otf)"));
-        filter.add_pattern("*.ttf");
-        filter.add_pattern("*.otf");
-        dialog.add_filter(&filter);
-
-        let gp_clone = gp.clone();
-        let f_path_clone = f_path.clone();
-        let win_dialog = win_inner.clone();
-
-        dialog.connect_response(move |d, response| {
-            if response == ResponseType::Accept {
-                if let Some(file) = d.file() {
-                    if let Some(path) = file.path() {
-                        let res = inject_unity_individual(&gp_clone, &path, &f_path_clone);
-                        let (msg_type, msg) = match res {
-                            Ok(_) => (gtk::MessageType::Info, format!("Fonte Unity substituída com sucesso!")),
-                            Err(e) => (gtk::MessageType::Error, e),
-                        };
-
-                        let msg_dialog = gtk::MessageDialog::new(
-                            Some(&win_dialog),
-                            gtk::DialogFlags::MODAL,
-                            msg_type,
-                            gtk::ButtonsType::Ok,
-                            &msg
-                        );
-                        msg_dialog.connect_response(|md, _| md.destroy());
-                        msg_dialog.show();
-                    }
-                }
-            }
-            d.destroy();
-        });
-        dialog.show();
-    });
-
-    row
-}
-
-fn scan_unity_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
+pub fn scan_unity_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
     let mut base_dir = PathBuf::from(game_path_str);
     if base_dir.is_file() {
         if let Some(p) = base_dir.parent() {
             base_dir = p.to_path_buf();
         }
     }
-    
+
     let script_path = crate::paths::app_root().join("unity_static_extractor");
-    
     let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
     let mut command = if packaged.is_file() {
         crate::paths::hidden_command(packaged)
@@ -810,7 +599,7 @@ fn scan_unity_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
         .current_dir(&script_path)
         .output()
         .map_err(|e| format!("Falha ao chamar C#: {}", e))?;
-        
+
     if !out.status.success() {
         return Err(format!("Extrator UABEA falhou: {}", String::from_utf8_lossy(&out.stderr).trim()));
     }
@@ -818,19 +607,17 @@ fn scan_unity_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
     let mut fonts = Vec::new();
     for line in txt.lines() {
         if line.starts_with("[FONT_SCAN] ") {
-            // UABEA gives us a stable locator: asset path, asset name and
-            // path ID.  The ID prevents replacing a similarly named font.
             let parts: Vec<&str> = line["[FONT_SCAN] ".len()..].splitn(4, '|').collect();
             if parts.len() == 4 && matches!(parts[0], "EMBEDDED" | "TMP") {
                 fonts.push(format!("{}|{}|{}|{}", parts[0], parts[1], parts[2], parts[3]));
             }
         }
     }
-    
+
     Ok(fonts)
 }
 
-fn inject_unity_individual(game_path_str: &str, user_font_path: &Path, target_internal_path: &str) -> Result<(), String> {
+pub fn inject_unity_individual(game_path_str: &str, user_font_path: &Path, target_internal_path: &str) -> Result<(), String> {
     let parts: Vec<&str> = target_internal_path.splitn(3, '|').collect();
     if parts.len() != 3 {
         return Err("Formato de fonte Unity inválido.".to_string());
@@ -839,16 +626,15 @@ fn inject_unity_individual(game_path_str: &str, user_font_path: &Path, target_in
     let font_name = parts[1];
     let path_id = parts[2];
     let font_locator = format!("{}|{}", asset_file, path_id);
-    
+
     let mut base_dir = PathBuf::from(game_path_str);
     if base_dir.is_file() {
         if let Some(p) = base_dir.parent() {
             base_dir = p.to_path_buf();
         }
     }
-    
+
     let script_path = crate::paths::app_root().join("unity_static_extractor");
-    
     let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
     let mut command = if packaged.is_file() {
         crate::paths::hidden_command(packaged)
@@ -866,7 +652,7 @@ fn inject_unity_individual(game_path_str: &str, user_font_path: &Path, target_in
         .current_dir(&script_path)
         .output()
         .map_err(|e| format!("Falha ao chamar C#: {}", e))?;
-        
+
     let txt = String::from_utf8_lossy(&out.stdout);
     if txt.contains("[SUCCESS]") {
         Ok(())
@@ -875,7 +661,7 @@ fn inject_unity_individual(game_path_str: &str, user_font_path: &Path, target_in
     }
 }
 
-fn export_unity_original_font(game_path_str: &str, target_internal_path: &str) -> Result<PathBuf, String> {
+pub fn export_unity_original_font(game_path_str: &str, target_internal_path: &str) -> Result<PathBuf, String> {
     let parts: Vec<&str> = target_internal_path.splitn(3, '|').collect();
     if parts.len() != 3 {
         return Err("Formato de fonte Unity inválido.".to_string());
@@ -884,9 +670,6 @@ fn export_unity_original_font(game_path_str: &str, target_internal_path: &str) -
     if base_dir.is_file() {
         base_dir = base_dir.parent().ok_or("Pasta do jogo inválida.")?.to_path_buf();
     }
-    // Same lifecycle as the Ren'Py preview: UABEA exports the original font
-    // once into a game-local temporary directory, then the UI reads that file
-    // for both preview and later manual export/replacement.
     let output_dir = base_dir.join("tpg_temp_fonts");
     let locator = format!("{}|{}", parts[0], parts[2]);
     let script_path = crate::paths::app_root().join("unity_static_extractor");
@@ -899,35 +682,56 @@ fn export_unity_original_font(game_path_str: &str, target_internal_path: &str) -
         command
     };
     let out = command
-        .arg("font-export").arg(&base_dir).arg(locator).arg(&output_dir)
-        .current_dir(&script_path).output()
+        .arg("font-export")
+        .arg(&base_dir)
+        .arg(locator)
+        .arg(&output_dir)
+        .current_dir(&script_path)
+        .output()
         .map_err(|e| format!("Falha ao chamar UABEA: {e}"))?;
     let text = String::from_utf8_lossy(&out.stdout);
     if !out.status.success() || !text.contains("[SUCCESS]") {
         return Err(format!("Falha ao extrair fonte com UABEA:\n{}", text));
     }
-    text.lines().find_map(|line| line.strip_prefix("[SUCCESS] "))
-        .map(PathBuf::from).ok_or("UABEA não retornou o arquivo extraído.".to_string())
+    text.lines()
+        .find_map(|line| line.strip_prefix("[SUCCESS] "))
+        .map(PathBuf::from)
+        .ok_or("UABEA não retornou o arquivo extraído.".to_string())
 }
 
-fn export_tmp_atlas_preview(game_path_str: &str, asset_path: &str, path_id: &str) -> Result<PathBuf, String> {
+pub fn export_tmp_atlas_preview(game_path_str: &str, asset_path: &str, path_id: &str) -> Result<PathBuf, String> {
     let mut base_dir = PathBuf::from(game_path_str);
-    if base_dir.is_file() { base_dir = base_dir.parent().ok_or("Pasta do jogo inválida.")?.to_path_buf(); }
+    if base_dir.is_file() {
+        base_dir = base_dir.parent().ok_or("Pasta do jogo inválida.")?.to_path_buf();
+    }
     let output_dir = base_dir.join("tpg_temp_fonts");
     let script_path = crate::paths::app_root().join("unity_static_extractor");
     let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
-    let mut command = if packaged.is_file() { crate::paths::hidden_command(packaged) } else {
-        let mut command = crate::paths::hidden_command("dotnet"); command.arg("run").arg("--"); command
+    let mut command = if packaged.is_file() {
+        crate::paths::hidden_command(packaged)
+    } else {
+        let mut command = crate::paths::hidden_command("dotnet");
+        command.arg("run").arg("--");
+        command
     };
-    let output = command.arg("tmp-atlas-export").arg(&base_dir).arg(asset_path).arg(path_id).arg(&output_dir)
-        .current_dir(&script_path).output().map_err(|e| format!("Falha ao chamar UABEA: {e}"))?;
+    let output = command
+        .arg("tmp-atlas-export")
+        .arg(&base_dir)
+        .arg(asset_path)
+        .arg(path_id)
+        .arg(&output_dir)
+        .current_dir(&script_path)
+        .output()
+        .map_err(|e| format!("Falha ao chamar UABEA: {e}"))?;
     let text = String::from_utf8_lossy(&output.stdout);
-    if !output.status.success() || !text.contains("[SUCCESS]") { return Err(text.trim().to_string()); }
-    text.lines().find_map(|line| line.strip_prefix("[SUCCESS] ")).map(PathBuf::from)
+    if !output.status.success() || !text.contains("[SUCCESS]") {
+        return Err(text.trim().to_string());
+    }
+    text.lines()
+        .find_map(|line| line.strip_prefix("[SUCCESS] "))
+        .map(PathBuf::from)
         .ok_or("UABEA não retornou a prévia do atlas.".to_string())
         .and_then(|ppm_path| {
-            // GTK on Windows does not bundle a PPM decoder. Convert the
-            // temporary, lossless atlas to PNG before handing it to Picture.
             let png_path = ppm_path.with_extension("png");
             image::open(&ppm_path)
                 .map_err(|e| format!("Falha ao abrir atlas temporário: {e}"))?
