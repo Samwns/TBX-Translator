@@ -3992,6 +3992,7 @@ dependencies = [
  "urlencoding",
  "walkdir",
  "winres",
+ "zbus",
  "zip",
 ]
 
