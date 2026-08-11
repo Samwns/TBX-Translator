@@ -138,37 +138,63 @@ pub async fn extract_texts(
         "Integrado"
     };
 
-    for chunk in dialogues.chunks(batch_size) {
+    // Separate items that can be resolved instantly via standard dictionary
+    // from items that need online translation API
+    let mut to_translate_indices: Vec<usize> = Vec::new();
+    let mut resolved_translations: Vec<Option<String>> = vec![None; dialogues.len()];
+
+    for (idx, (text, _, _)) in dialogues.iter().enumerate() {
+        if let Some(std_trans) = crate::dictionary::lookup(text, tgt_code) {
+            resolved_translations[idx] = Some(std_trans.to_string());
+        } else {
+            to_translate_indices.push(idx);
+        }
+    }
+
+    let dict_hits = dialogues.len() - to_translate_indices.len();
+    if dict_hits > 0 {
+        let _ = tx.send(UiMsg::Log(format!("[Dicionário Padrão] {} termos de interface/menu pré-traduzidos instantaneamente.", dict_hits)));
+    }
+
+    for chunk_indices in to_translate_indices.chunks(batch_size) {
         if cancelled.load(Ordering::SeqCst) { break; }
 
-        let texts: Vec<String> = chunk.iter()
+        let chunk_items: Vec<&(String, String, String)> = chunk_indices.iter()
+            .map(|&idx| &dialogues[idx])
+            .collect();
+
+        let texts: Vec<String> = chunk_items.iter()
             .map(|(t, _, _)| protect_renpy_tags(t))
             .collect();
 
         let translated = api::translate_batch(&client, &texts, api_url, src_code, tgt_code).await
             .unwrap_or_else(|_| vec![]);
 
-        for (i, (original, file, _)) in chunk.iter().enumerate() {
+        for (i, &orig_idx) in chunk_indices.iter().enumerate() {
+            let (original, _, _) = &dialogues[orig_idx];
             let raw = translated.get(i).cloned().unwrap_or_default();
             let raw = if raw.trim().is_empty() { original.clone() } else { raw.trim().to_string() };
             let trad = restore_renpy_tags(&raw, original);
-
-            let target_file = if keep_structure {
-                let mut f = file.clone();
-                if f.ends_with(".rpyc") { f = f[..f.len()-5].to_string() + ".rpy"; }
-                f
-            } else {
-                "script.rpy".to_string()
-            };
-
-            let _ = tx.send(UiMsg::Log(format!("  [OK] {} -> {}", original.replace('\n', " "), trad.replace('\n', " "))));
-
-
-            writers.entry(target_file).or_default().push((original.clone(), trad));
+            resolved_translations[orig_idx] = Some(trad);
         }
 
-        processed += chunk.len();
+        processed += chunk_indices.len();
         let _ = tx.send(UiMsg::Progress(processed, total));
+    }
+
+    // Assemble final translations into writer files
+    for (i, (original, file, _)) in dialogues.iter().enumerate() {
+        let trad = resolved_translations[i].clone().unwrap_or_else(|| original.clone());
+        let target_file = if keep_structure {
+            let mut f = file.clone();
+            if f.ends_with(".rpyc") { f = f[..f.len()-5].to_string() + ".rpy"; }
+            f
+        } else {
+            "script.rpy".to_string()
+        };
+
+        let _ = tx.send(UiMsg::Log(format!("  [OK] {} -> {}", original.replace('\n', " "), trad.replace('\n', " "))));
+        writers.entry(target_file).or_default().push((original.clone(), trad));
     }
 
     // Write .rpy files
@@ -267,29 +293,36 @@ fn filter_reason(text: &str) -> Option<&'static str> {
     None
 }
 
-
-
-fn protect_renpy_tags(text: &str) -> String {
-    // Protect both {...} tags and [...] variables
+pub fn protect_renpy_tags(text: &str) -> String {
+    // Protect both {...} tags and [...] variables (such as [plural], [mc_nombre], [her], etc.)
     let re = Regex::new(r"(\{[^{}\r\n]{1,120}\}|\[[^\[\]\r\n]{1,80}\])").unwrap();
     let mut idx = 0usize;
     re.replace_all(text, |_: &regex::Captures| {
-        let marker = format!("777{:03}777", idx);
+        let marker = format!("_TBXVAR{}_", idx);
         idx += 1;
         marker
     }).to_string()
 }
 
-fn restore_renpy_tags(translated: &str, original: &str) -> String {
+pub fn restore_renpy_tags(translated: &str, original: &str) -> String {
     let re = Regex::new(r"(\{[^{}\r\n]{1,120}\}|\[[^\[\]\r\n]{1,80}\])").unwrap();
     let tags: Vec<String> = re.find_iter(original).map(|m| m.as_str().to_string()).collect();
     let mut result = translated.to_string();
+
     for (i, tag) in tags.iter().enumerate() {
-        let marker_re = Regex::new(&format!(r"7\s*7\s*7\s*{}\s*7\s*7\s*7", 
-            format!("{:03}", i).chars().map(|c| c.to_string()).collect::<Vec<_>>().join(r"\s*")
-        )).unwrap();
-        result = marker_re.replace_all(&result, tag.as_str()).to_string();
+        // Tolerant regex matching _TBXVAR0_, _ TBXVAR0 _, _TBXVAR 0_, TBXVAR0, etc.
+        let pattern = format!(r"(?:_+|\b)\s*TBX(?:VAR|TAG)\s*{}\s*(?:_+|\b)", i);
+        if let Ok(marker_re) = Regex::new(&pattern) {
+            result = marker_re.replace_all(&result, tag.as_str()).to_string();
+        }
+
+        // Backward compatibility for numeric 777000777 pattern
+        let old_pattern = format!(r"7\s*7\s*7[\s.,]*{}\s*7\s*7\s*7", format!("{:03}", i).chars().map(|c| c.to_string()).collect::<Vec<_>>().join(r"[\s.,]*"));
+        if let Ok(old_re) = Regex::new(&old_pattern) {
+            result = old_re.replace_all(&result, tag.as_str()).to_string();
+        }
     }
+
     result
 }
 
@@ -298,4 +331,40 @@ fn escape_renpy(text: &str) -> String {
         .replace('\r', "")
         .replace('"', "\\\"")
         .replace('\n', "\\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_protect_and_restore_renpy_interpolations() {
+        let original = "No one said anything. All your [plural] looked at you at the same time.";
+        let protected = protect_renpy_tags(original);
+        assert_eq!(protected, "No one said anything. All your _TBXVAR0_ looked at you at the same time.");
+
+        // Simulate translation preserving placeholder
+        let simulated_trans = "Ninguém disse nada. Todas as suas _TBXVAR0_ olharam para você ao mesmo tempo.";
+        let restored = restore_renpy_tags(simulated_trans, original);
+        assert_eq!(restored, "Ninguém disse nada. Todas as suas [plural] olharam para você ao mesmo tempo.");
+    }
+
+    #[test]
+    fn test_protect_and_restore_multiple_tags_and_vars() {
+        let original = "Olá [mc_nombre], você tem {b}[count]{/b} mensagens de {color=#ff0000}[sender]{/color}!";
+        let protected = protect_renpy_tags(original);
+        assert_eq!(protected, "Olá _TBXVAR0_, você tem _TBXVAR1__TBXVAR2__TBXVAR3_ mensagens de _TBXVAR4__TBXVAR5__TBXVAR6_!");
+
+        let simulated_trans = "Hello _TBXVAR0_, you have _TBXVAR1__TBXVAR2__TBXVAR3_ messages from _TBXVAR4__TBXVAR5__TBXVAR6_!";
+        let restored = restore_renpy_tags(simulated_trans, original);
+        assert_eq!(restored, "Hello [mc_nombre], you have {b}[count]{/b} messages from {color=#ff0000}[sender]{/color}!");
+    }
+
+    #[test]
+    fn test_restore_tolerant_spacing() {
+        let original = "Hello [plural] and [mc_nombre]!";
+        let simulated_with_spaces = "Olá _ TBXVAR0 _ e _TBXVAR 1_!";
+        let restored = restore_renpy_tags(simulated_with_spaces, original);
+        assert_eq!(restored, "Olá [plural] e [mc_nombre]!");
+    }
 }

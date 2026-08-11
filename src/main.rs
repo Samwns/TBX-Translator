@@ -10,6 +10,7 @@ mod renpy_extractor;
 mod unity_extractor;
 mod editor_ui;
 mod font_injector;
+pub mod dictionary;
 mod i18n;
 mod paths;
 mod ui;

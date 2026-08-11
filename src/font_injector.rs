@@ -185,6 +185,7 @@ impl FontInjectorState {
                 ui.label(egui::RichText::new("Nenhuma fonte escaneada ainda. Clique no botão acima para listar as fontes embutidas.").color(Color32::from_rgb(166, 173, 200)));
             } else {
                 let mut action_to_perform: Option<(String, PathBuf)> = None;
+                let mut action_export: Option<String> = None;
 
                 for font_path in &fonts {
                     ui.group(|ui| {
@@ -201,6 +202,12 @@ impl FontInjectorState {
                                     {
                                         action_to_perform = Some((font_path.clone(), file));
                                     }
+                                }
+                                
+                                let btn_ext = egui::Button::new(egui::RichText::new("Extrair original").color(Color32::from_rgb(17, 17, 27)).strong())
+                                    .fill(Color32::from_rgb(203, 166, 247));
+                                if ui.add(btn_ext).clicked() {
+                                    action_export = Some(font_path.clone());
                                 }
                             });
                         });
@@ -240,6 +247,29 @@ impl FontInjectorState {
                         }
                         Err(e) => {
                             self.status_message = Some((true, format!("❌ Erro ao substituir fonte: {}", e)));
+                        }
+                    }
+                }
+
+                if let Some(target_font) = action_export {
+                    if let Some(folder) = rfd::FileDialog::new().set_title("Selecione a pasta para salvar").pick_folder() {
+                        let font_file_name = Path::new(&target_font).file_name().and_then(|s| s.to_str()).unwrap_or("");
+                        let mut base_dir = PathBuf::from(game_path);
+                        if base_dir.is_file() {
+                            if let Some(p) = base_dir.parent() {
+                                base_dir = p.to_path_buf();
+                            }
+                        }
+                        let dumped_font_path = base_dir.join("game").join("tpg_temp_fonts").join(font_file_name);
+                        
+                        if dumped_font_path.exists() {
+                            let dest = folder.join(font_file_name);
+                            match fs::copy(&dumped_font_path, &dest) {
+                                Ok(_) => self.status_message = Some((false, format!("✅ Fonte extraída para:\n{}", dest.display()))),
+                                Err(e) => self.status_message = Some((true, format!("❌ Erro ao extrair fonte: {}", e))),
+                            }
+                        } else {
+                            self.status_message = Some((true, "❌ A fonte temporária não foi encontrada.".to_string()));
                         }
                     }
                 }
@@ -358,12 +388,22 @@ impl FontInjectorState {
                 }
 
                 if let Some(target_font) = action_export {
-                    match export_unity_original_font(game_path, &target_font) {
-                        Ok(p) => {
-                            self.status_message = Some((false, format!("✅ Fonte original extraída em:\n{}", p.display())));
-                        }
-                        Err(e) => {
-                            self.status_message = Some((true, format!("❌ Erro ao extrair fonte Unity: {}", e)));
+                    if let Some(folder) = rfd::FileDialog::new().set_title("Selecione a pasta para salvar").pick_folder() {
+                        match export_unity_original_font(game_path, &target_font) {
+                            Ok(p) => {
+                                if let Some(file_name) = p.file_name() {
+                                    let dest = folder.join(file_name);
+                                    match fs::copy(&p, &dest) {
+                                        Ok(_) => self.status_message = Some((false, format!("✅ Fonte original extraída para:\n{}", dest.display()))),
+                                        Err(e) => self.status_message = Some((true, format!("❌ Erro ao copiar fonte Unity: {}", e))),
+                                    }
+                                } else {
+                                    self.status_message = Some((true, "❌ Erro ao identificar o nome do arquivo da fonte Unity.".to_string()));
+                                }
+                            }
+                            Err(e) => {
+                                self.status_message = Some((true, format!("❌ Erro ao extrair fonte Unity: {}", e)));
+                            }
                         }
                     }
                 }

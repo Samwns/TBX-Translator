@@ -1,17 +1,29 @@
 # Logs
 *.log
 logs/
+stderr.log
+error.log
 
 # Rust / Cargo
 /target/
 Cargo.lock
 
-
-# backups
+# Test, Lab & Backup folders
+/Lab/
+/Test2/
+/backup/
 /backups/
 *.bak
 *.backup
 *.old
+
+# Test and scratch scripts / dumps
+test*
+*.cs
+!unity_static_extractor/**
+all_text_assets.txt
+dump*.txt
+test_write.txt
 
 # Node.js (leftover from Tauri phase — no longer used)
 node_modules/
@@ -24,8 +36,7 @@ pnpm-debug.log*
 
 # IDE / Editors
 .idea/
-.vscode/*
-!.vscode/extensions.json
+.vscode/
 *.suo
 *.ntvs*
 *.njsproj
@@ -33,7 +44,6 @@ pnpm-debug.log*
 *.swp
 *.sw?
 .DS_Store
-
 
 # Config persistente local do app (não vazar configs pessoais)
 config.properties
@@ -51,7 +61,6 @@ mvnw.cmd
 pom.xml
 build_java.py
 fix_dumper.py
-test_write.txt
 
 # .NET / C#
 bin/
@@ -70,5 +79,7 @@ __pycache__/
 tpg_temp/
 tpg_temp_fonts/
 dump.txt
+tpg_boot.rpy
 tpg_boot.rpyc
+tpg_dumper.rpy
 tpg_dumper.rpyc

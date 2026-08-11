@@ -198,15 +198,34 @@ pub async fn extract_texts(
     
     let mut translation_map = HashMap::new();
 
-    for chunk in texts.chunks(batch_size) {
+    // Check standard dictionary for instant local resolution
+    let mut to_translate_indices: Vec<usize> = Vec::new();
+    let mut resolved_translations: Vec<Option<String>> = vec![None; texts.len()];
+
+    for (idx, text) in texts.iter().enumerate() {
+        if let Some(std_trans) = crate::dictionary::lookup(text, tgt_code) {
+            resolved_translations[idx] = Some(std_trans.to_string());
+        } else {
+            to_translate_indices.push(idx);
+        }
+    }
+
+    let dict_hits = texts.len() - to_translate_indices.len();
+    if dict_hits > 0 {
+        let _ = tx.send(UiMsg::Log(format!("[Unity - Dicionário Padrão] {} termos de interface pré-traduzidos instantaneamente.", dict_hits)));
+    }
+
+    for chunk_indices in to_translate_indices.chunks(batch_size) {
         if cancelled.load(Ordering::SeqCst) { 
             let _ = tx.send(UiMsg::Log("[Unity] Operação cancelada pelo usuário!".into()));
             return Err("Cancelado".into());
         }
 
+        let chunk: Vec<&String> = chunk_indices.iter().map(|&idx| &texts[idx]).collect();
+
         // Protect Yarn Spinner variables {0}, {1}, {2} and rich text tags before translation
         let mut protected_chunks: Vec<(String, Vec<(String, String)>)> = Vec::new();
-        for original in chunk {
+        for &original in &chunk {
             let mut protected = original.clone();
             let mut replacements: Vec<(String, String)> = Vec::new();
             
@@ -244,7 +263,8 @@ pub async fn extract_texts(
         let translated = api::translate_batch(&client, &chunk_vec, "", src_code, tgt_code)
             .await.unwrap_or_else(|_| vec![]);
 
-        for (i, original) in chunk.iter().enumerate() {
+        for (i, &orig_idx) in chunk_indices.iter().enumerate() {
+            let original = &texts[orig_idx];
             let trad = translated.get(i).cloned().unwrap_or_default();
             let trad = if trad.trim().is_empty() { 
                 original.clone() 
@@ -257,12 +277,17 @@ pub async fn extract_texts(
                 }
                 restored
             };
-            let _ = tx.send(UiMsg::Log(format!("  [OK] {} -> {}", original.replace('\n', " "), trad.replace('\n', " "))));
-            translation_map.insert(original.clone(), trad);
+            resolved_translations[orig_idx] = Some(trad);
         }
 
-        processed += chunk.len();
+        processed += chunk_indices.len();
         let _ = tx.send(UiMsg::Progress(processed, total));
+    }
+
+    for (i, original) in texts.iter().enumerate() {
+        let trad = resolved_translations[i].clone().unwrap_or_else(|| original.clone());
+        let _ = tx.send(UiMsg::Log(format!("  [OK] {} -> {}", original.replace('\n', " "), trad.replace('\n', " "))));
+        translation_map.insert(original.clone(), trad);
     }
     
     let map_json_str = serde_json::to_string_pretty(&translation_map).unwrap();

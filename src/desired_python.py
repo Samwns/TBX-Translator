@@ -86,7 +86,27 @@ init python:
                     except:
                         pass
 
-                standard_ui = ['Start', 'Load', 'Preferences', 'Quit', 'Main Menu', 'Return', 'Save', 'About', 'Help', 'Settings', 'History', 'Skip', 'Auto', 'Q.Save', 'Q.Load', 'Prefs', 'Options', 'Language', 'Menu', 'Back', 'Yes', 'No', 'Empty Slot', 'Are you sure you want to quit?', 'Are you sure you want to return to the main menu?', 'Window', 'Fullscreen', 'Transitions', 'All', 'None', 'Stop Skipping', 'Keep Skipping', 'Auto-Forward Time', 'Text Speed', 'Music Volume', 'Sound Volume', 'Voice Volume']
+                standard_ui = [
+                    'Start', 'Start Game', 'Load', 'Load Game', 'Save', 'Save Game',
+                    'Preferences', 'Options', 'Settings', 'Prefs', 'History', 'Log',
+                    'Skip', 'Auto', 'Q.Save', 'Q.Load', 'Quick Save', 'Quick Load',
+                    'Return', 'Back', 'Main Menu', 'Help', 'About', 'Quit', 'Exit',
+                    'Menu', 'Continue', 'Replay', 'Display', 'Window', 'Fullscreen',
+                    'Rollback Side', 'Disable', 'Left', 'Right', 'Unseen Text',
+                    'After Choices', 'Transitions', 'All', 'None', 'Text Speed',
+                    'Auto-Forward Time', 'Music Volume', 'Sound Volume', 'Voice Volume',
+                    'Mute All', 'Language', 'Accessibility', 'Are you sure you want to quit?',
+                    'Are you sure you want to return to the main menu?',
+                    'Are you sure you want to overwrite your save?',
+                    'Loading will lose unsaved progress. Are you sure you want to do this?',
+                    'Are you sure you want to delete this save?',
+                    'Yes', 'No', 'OK', 'Cancel', 'Empty Slot', 'Empty Slot.',
+                    'Stop Skipping', 'Keep Skipping', 'Keyboard Shortcuts', 'Mouse', 'Gamepad',
+                    'Previous', 'Next', 'Page {}', 'Automatic saves', 'Quick saves',
+                    'Advance dialogue and activate the interface.', 'Rolls back to earlier dialogue.',
+                    'Bypasses dialogue while held.', 'Toggles dialogue skipping.',
+                    'Takes a screenshot.', 'Hides the interface.', 'Opens the accessibility menu.'
+                ]
                 for s in standard_ui:
                     f.write('screens.rpy|||interface|||' + s + '\n')
 
