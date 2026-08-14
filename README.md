@@ -11,6 +11,8 @@
 
   [![Discord](https://img.shields.io/badge/Discord-Entrar%20no%20servidor-5865F2?logo=discord&logoColor=white)](https://discord.gg/xsxhvWgWBz)
   [![Ko-fi](https://img.shields.io/badge/Ko--fi-Apoiar%20o%20projeto-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/samwns)
+
+  **Português (Brasil)** · [English](README.en.md)
 </div>
 
 ## Recursos
@@ -60,7 +62,7 @@ As mensagens da release e do Discord são geradas a partir de
 [`docs/releases/UPDATE_SUMMARY.md`](docs/releases/UPDATE_SUMMARY.md):
 
 ```bash
-scripts/generate-release-notes.sh "" 24
+scripts/generate-release-notes.sh "" <número-do-build>
 ```
 
 Se o secret `DISCORD_WEBHOOK_URL` estiver configurado no repositório, o workflow
@@ -84,13 +86,3 @@ O GitHub também exibe o botão **Sponsor** por meio de `.github/FUNDING.yml`.
 
 Distribuído sob a [CC BY-NC-SA 4.0](LICENSE): uso e redistribuição não comerciais,
 com atribuição e compartilhamento pela mesma licença.
-
----
-
-### English
-
-TBX Translator is a native Rust/egui desktop tool for extracting, reviewing,
-translating, and installing game text for Ren'Py, Unity, and Godot. Download the
-[latest release](https://github.com/Samwns/TBX-Translator/releases/latest), join
-the [Discord server](https://discord.gg/xsxhvWgWBz), or support development on
-[Ko-fi](https://ko-fi.com/samwns).
