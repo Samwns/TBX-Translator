@@ -58,16 +58,6 @@ Create every package supported on the current platform with:
 cargo package-all
 ```
 
-Release and Discord messages are generated from
-[`docs/releases/UPDATE_SUMMARY.md`](docs/releases/UPDATE_SUMMARY.md):
-
-```bash
-scripts/generate-release-notes.sh "" <build-number>
-```
-
-When the `DISCORD_WEBHOOK_URL` repository secret is configured, the release
-workflow publishes the generated message after the GitHub release is ready.
-
 ## Documentation
 
 - [Developer manual](docs/MANUAL_DESENVOLVEDOR_EN.md)

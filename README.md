@@ -58,16 +58,6 @@ Para criar os pacotes suportados na plataforma atual:
 cargo package-all
 ```
 
-As mensagens da release e do Discord são geradas a partir de
-[`docs/releases/UPDATE_SUMMARY.md`](docs/releases/UPDATE_SUMMARY.md):
-
-```bash
-scripts/generate-release-notes.sh "" <número-do-build>
-```
-
-Se o secret `DISCORD_WEBHOOK_URL` estiver configurado no repositório, o workflow
-publica automaticamente a mensagem no Discord depois de criar a release.
-
 ## Documentação
 
 - [Manual do desenvolvedor](docs/MANUAL_DESENVOLVEDOR_PTBR.md)
