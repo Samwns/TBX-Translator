@@ -2,6 +2,7 @@ use crate::ui::TbxApp;
 use egui::*;
 
 use crate::ui::toggle_ui;
+use crate::ui::t;
 
 impl TbxApp {
     pub fn render_modals(&mut self, ctx: &Context) {

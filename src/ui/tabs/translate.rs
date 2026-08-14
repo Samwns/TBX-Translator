@@ -37,7 +37,7 @@ impl TbxApp {
 
         // 1. Engine selector: independent floating pills, detached from the top tabs.
         ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 14.0;
+            ui.spacing_mut().item_spacing.x = 0.0;
 
             let renpy_active = self.engine_mode == 0;
             let unity_active = self.engine_mode == 1;
@@ -61,8 +61,7 @@ impl TbxApp {
                     .strong(),
             )
             .fill(animated_fill("renpy_engine_pill", renpy_active, Color32::from_rgb(249, 226, 175)))
-            .stroke(Stroke::new(1.0, if renpy_active { Color32::from_rgb(249, 226, 175) } else { Color32::from_rgb(69, 71, 90) }))
-            .rounding(Rounding::same(14.0))
+            .rounding(Rounding { nw: 6.0, sw: 6.0, ne: 0.0, se: 0.0 })
             .min_size(vec2(132.0, 40.0));
 
             if ui.add(renpy_btn).clicked() {
@@ -79,8 +78,7 @@ impl TbxApp {
                     .strong(),
             )
             .fill(animated_fill("unity_engine_pill", unity_active, Color32::from_rgb(137, 180, 250)))
-            .stroke(Stroke::new(1.0, if unity_active { Color32::from_rgb(137, 180, 250) } else { Color32::from_rgb(69, 71, 90) }))
-            .rounding(Rounding::same(14.0))
+            .rounding(Rounding::ZERO)
             .min_size(vec2(132.0, 40.0));
 
             if ui.add(unity_btn).clicked() {
@@ -96,8 +94,7 @@ impl TbxApp {
                     .strong(),
             )
             .fill(animated_fill("godot_engine_pill", godot_active, Color32::from_rgb(166, 227, 161)))
-            .stroke(Stroke::new(1.0, if godot_active { Color32::from_rgb(166, 227, 161) } else { Color32::from_rgb(69, 71, 90) }))
-            .rounding(Rounding::same(14.0))
+            .rounding(Rounding { nw: 0.0, sw: 0.0, ne: 6.0, se: 6.0 })
             .min_size(vec2(132.0, 40.0));
 
             if ui.add(godot_btn).clicked() {
@@ -269,7 +266,7 @@ impl TbxApp {
         let current_progress = self.engine_progress[self.engine_mode as usize];
         ui.horizontal(|ui| {
             if !current_engine_running {
-                let t_time = _ctx.input(|i| i.time);
+                let t_time = ctx.input(|i| i.time);
                 let pulse = (t_time * 4.0).sin() as f32 * 0.5 + 0.5; // 0.0 to 1.0
 
                 let (btn_text, base_col) = if self.engine_mode == 0 {
@@ -299,7 +296,7 @@ impl TbxApp {
                         self.start_translation(false);
                     }
                 }
-                _ctx.request_repaint(); // Animate continuously
+                ctx.request_repaint(); // Animate continuously
 
                 if self.engine_mode == 1 || self.engine_mode == 2 {
                     let btn_text = if self.engine_mode == 1 { "INJETAR TRADUÇÃO (UNITY)" } else { "INJETAR TRADUÇÃO (GODOT)" };

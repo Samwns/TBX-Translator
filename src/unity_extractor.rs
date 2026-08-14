@@ -13,7 +13,7 @@ pub fn detect_game_data_dir(executable: &str) -> Option<PathBuf> {
     let exe_name = exe_path.file_stem()?.to_string_lossy();
     let data_dir_name = format!("{}_Data", exe_name);
     let data_dir = parent.join(&data_dir_name);
-
+    
     if data_dir.is_dir() {
         Some(data_dir)
     } else {
@@ -23,18 +23,18 @@ pub fn detect_game_data_dir(executable: &str) -> Option<PathBuf> {
 
 pub fn detect_unity_backend(executable: &str) -> Option<&'static str> {
     let data_dir = detect_game_data_dir(executable)?;
-
+    
     // Check for Mono
     if data_dir.join("Managed").join("Assembly-CSharp.dll").exists() {
         return Some("Mono");
     }
-
+    
     // Check for IL2CPP
     let parent = Path::new(executable).parent().unwrap_or(Path::new("."));
     if data_dir.join("il2cpp_data").exists() || parent.join("GameAssembly.dll").exists() {
         return Some("IL2CPP");
     }
-
+    
     // Fallback if we have a _Data folder but can't distinguish (rare)
     Some("Unknown Unity")
 }
@@ -116,7 +116,7 @@ pub async fn extract_texts(
     };
 
     let _ = tx.send(UiMsg::Log(format!("[Unity] Pasta de dados: {}", data_dir.display())));
-
+    
     let app_root = crate::paths::app_root();
     let extractor_dir = app_root.join("unity_static_extractor");
     let csproj = extractor_dir.join("unity_static_extractor.csproj");
@@ -130,9 +130,9 @@ pub async fn extract_texts(
     let extracted_json = out_dir.join("extracted_texts.json");
     let unitypy_json = out_dir.join("unitypy_texts.json");
     let translated_json = out_dir.join("translated_texts.json");
-
+    
     let _ = tx.send(UiMsg::Log(format!("[Unity] Chamando extrator C# (modo extract)...")));
-
+    
     let packaged_extractor = extractor_dir.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
     let mut command = if packaged_extractor.is_file() {
         crate::paths::hidden_command(packaged_extractor)
@@ -157,16 +157,16 @@ pub async fn extract_texts(
         if line.contains("warning CS") { continue; }
         let _ = tx.send(UiMsg::Log(line.to_string()));
     }
-
+    
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("Erro no extrator C#: {}", stderr));
     }
-
+    
     if !extracted_json.exists() {
         return Err("Arquivo JSON de extração não foi gerado!".into());
     }
-
+    
     let json_content = fs::read_to_string(&extracted_json).map_err(|e| e.to_string())?;
     let mut texts: Vec<String> = serde_json::from_str(&json_content).map_err(|e| format!("Erro ao ler JSON: {}", e))?;
 
@@ -181,11 +181,11 @@ pub async fn extract_texts(
             .map_err(|e| format!("Erro atualizando JSON consolidado: {e}"))?;
         let _ = tx.send(UiMsg::Log(format!("[Unity] UnityPy adicionou {} textos únicos.", texts.len() - before)));
     }
-
+    
     if texts.is_empty() {
         return Err("Nenhum texto encontrado para traduzir.".into());
     }
-
+    
     let _ = tx.send(UiMsg::Log(format!("[Unity] {} textos extraídos. Iniciando tradução...", texts.len())));
 
     let client = reqwest::Client::new();
@@ -197,7 +197,7 @@ pub async fn extract_texts(
     let batch_size = 64usize;
     let mut processed = 0usize;
     let total = texts.len();
-
+    
     let mut translation_map = HashMap::new();
 
     // Check standard dictionary for instant local resolution
@@ -219,7 +219,7 @@ pub async fn extract_texts(
     }
 
     for chunk_indices in to_translate_indices.chunks(batch_size) {
-        if cancelled.load(Ordering::SeqCst) {
+        if cancelled.load(Ordering::SeqCst) { 
             let _ = tx.send(UiMsg::Log("[Unity] Cancelamento solicitado pelo usuário...".into()));
             was_cancelled = true;
             break;
@@ -232,7 +232,7 @@ pub async fn extract_texts(
         for &original in &chunk {
             let mut protected = original.clone();
             let mut replacements: Vec<(String, String)> = Vec::new();
-
+            
             // Protect {0}, {1}, {2}, etc.
             let var_re = regex::Regex::new(r"\{(\d+)\}").unwrap();
             for cap in var_re.captures_iter(original) {
@@ -242,7 +242,7 @@ pub async fn extract_texts(
                     replacements.push((var.clone(), placeholder.clone()));
                 }
             }
-
+            
             // Protect rich text tags like <color=#xxx>, </color>, <size=xxx>, <b>, </b>, etc.
             let tag_re = regex::Regex::new(r"</?[a-zA-Z][^>]*>").unwrap();
             let mut tag_idx = 0;
@@ -254,17 +254,17 @@ pub async fn extract_texts(
                     tag_idx += 1;
                 }
             }
-
+            
             // Apply replacements
             for (from, to) in &replacements {
                 protected = protected.replace(from, to);
             }
-
+            
             protected_chunks.push((protected, replacements));
         }
 
         let chunk_vec: Vec<String> = protected_chunks.iter().map(|(s, _)| s.clone()).collect();
-
+        
         if !detected_mismatch && src_code != "auto" && detection_attempts < 15 {
             if let Some(sample) = chunk_vec.iter().filter(|t| t.len() > 15).max_by_key(|t| t.len()) {
                 detection_attempts += 1;
@@ -285,9 +285,9 @@ pub async fn extract_texts(
         for (i, &orig_idx) in chunk_indices.iter().enumerate() {
             let original = &texts[orig_idx];
             let trad = translated.get(i).cloned().unwrap_or_default();
-            let trad = if trad.trim().is_empty() {
-                original.clone()
-            } else {
+            let trad = if trad.trim().is_empty() { 
+                original.clone() 
+            } else { 
                 // Restore protected variables and tags
                 let (_, ref replacements) = protected_chunks[i];
                 let mut restored = trad.trim().to_string();
@@ -308,10 +308,10 @@ pub async fn extract_texts(
         let _ = tx.send(UiMsg::Log(format!("  [OK] {} -> {}", original.replace('\n', " "), trad.replace('\n', " "))));
         translation_map.insert(original.clone(), trad);
     }
-
+    
     let map_json_str = serde_json::to_string_pretty(&translation_map).unwrap();
     fs::write(&translated_json, map_json_str).map_err(|e| e.to_string())?;
-
+    
     if was_cancelled {
         let _ = tx.send(UiMsg::Log(format!("[Aviso] A tradução Unity foi cancelada. Os textos traduzidos até o momento foram salvos no JSON.")));
         let _ = tx.send(UiMsg::Cancelled);
@@ -326,7 +326,7 @@ pub async fn extract_texts(
 pub fn extract_local_zip(zip_path: &Path, target_dir: &Path) -> Result<(), String> {
     let file = fs::File::open(zip_path).map_err(|e| format!("Erro ao abrir ZIP {}: {}", zip_path.display(), e))?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Erro ao ler ZIP: {}", e))?;
-
+    
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).map_err(|e| format!("Erro lendo arquivo no zip: {}", e))?;
         let outpath = match file.enclosed_name() {
@@ -406,22 +406,22 @@ pub async fn inject_texts(
     target_lang: &str,
     tx: std::sync::mpsc::Sender<UiMsg>,
 ) -> Result<(), String> {
-
+    
     let backend = detect_unity_backend(executable).unwrap_or("Desconhecido");
-
+    
     let out_dir = output_folder(executable, translation_folder, target_lang);
     let translated_json = out_dir.join("translated_texts.json");
-
+    
     if !translated_json.exists() {
         return Err("Nenhum arquivo JSON de tradução encontrado! Faça a extração/tradução primeiro.".into());
     }
 
     let _ = tx.send(UiMsg::Log(format!("[Unity] Gerando dicionário para XUnity.AutoTranslator (Motor: {})...", backend)));
-
+    
     // Ler o JSON traduzido
     let json_content = fs::read_to_string(&translated_json).map_err(|e| e.to_string())?;
     let translation_map: HashMap<String, String> = serde_json::from_str(&json_content).map_err(|e| format!("Erro ao ler JSON: {}", e))?;
-
+    
     if translation_map.is_empty() {
         return Err("O JSON de tradução está vazio!".into());
     }
@@ -429,33 +429,33 @@ pub async fn inject_texts(
     let mut dict_content = String::new();
     dict_content.push_str("// Formato compativel com XUnity.AutoTranslator: Original=Traducao\n");
     dict_content.push_str("// Gerado automaticamente pelo TBX - Translator\n\n");
-
+    
     for (orig, trad) in &translation_map {
         // XUnity suporta escapes para quebras de linha
         let safe_orig = orig.replace('\n', "\\n").replace('\r', "\\r");
         let safe_trad = trad.replace('\n', "\\n").replace('\r', "\\r");
-
+        
         // Evitar strings puramente vazias de corromper o layout
         if safe_orig.trim().is_empty() {
             continue;
         }
-
+        
         dict_content.push_str(&format!("{}={}\n", safe_orig, safe_trad));
     }
-
+    
     // Salvar na pasta Workspace
     let output_txt = out_dir.join("_AutoGeneratedTranslations.txt");
     fs::write(&output_txt, &dict_content).map_err(|e| e.to_string())?;
-
+    
     let _ = tx.send(UiMsg::Log(format!("[Unity] Dicionário gerado com sucesso: {}", output_txt.display())));
-
+    
     let parent = Path::new(executable).parent().unwrap_or(Path::new("."));
     let bepinex_dir = parent.join("BepInEx");
-
+    
     // === INSTALAÇÃO DO BEPINEX A PARTIR DOS ZIPS LOCAIS ===
     if !bepinex_dir.exists() {
         let _ = tx.send(UiMsg::Log("[Unity] BepInEx não encontrado. Instalando dos ZIPs locais...".into()));
-
+        
         // 1. Instalar BepInEx
         if let Some(bepinex_zip) = find_local_bepinex_zip(&backend) {
             let _ = tx.send(UiMsg::Log(format!("[Unity] Extraindo BepInEx de: {}", bepinex_zip.file_name().unwrap_or_default().to_string_lossy())));
@@ -464,7 +464,7 @@ pub async fn inject_texts(
         } else {
             return Err("ZIP do BepInEx não encontrado na pasta BepInEx/ do TBX!".into());
         }
-
+        
         // 2. Instalar XUnity.AutoTranslator
         if let Some(xunity_zip) = find_local_xunity_zip(&backend) {
             let _ = tx.send(UiMsg::Log(format!("[Unity] Extraindo XUnity.AutoTranslator de: {}", xunity_zip.file_name().unwrap_or_default().to_string_lossy())));
@@ -473,14 +473,14 @@ pub async fn inject_texts(
         } else {
             let _ = tx.send(UiMsg::Log("[Unity] AVISO: ZIP do XUnity.AutoTranslator não encontrado. Tradução runtime não estará disponível.".into()));
         }
-
+        
         // 3. Rodar o jogo brevemente para gerar configs iniciais do BepInEx
         let _ = tx.send(UiMsg::Log("[Unity] Iniciando jogo brevemente para gerar configs do BepInEx...".into()));
-
+        
         let game_process = crate::paths::hidden_command(executable)
             .env("WINEDLLOVERRIDES", "winhttp=n,b")
             .spawn();
-
+        
         match game_process {
             Ok(mut child) => {
                 let _ = tx.send(UiMsg::Log("[Unity] Aguardando BepInEx inicializar (10 segundos)...".into()));
@@ -495,21 +495,21 @@ pub async fn inject_texts(
                 let _ = tx.send(UiMsg::Log("[Unity] WINEDLLOVERRIDES=\"winhttp=n,b\" %command%".into()));
             }
         }
-
+        
         // Configurar o AutoTranslatorConfig.ini para garantir que o idioma está correto
         let config_dir = bepinex_dir.join("config");
         let _ = fs::create_dir_all(&config_dir);
         let config_file = config_dir.join("AutoTranslatorConfig.ini");
-
+        
         let target_code = api::get_lang_code(target_lang);
         if config_file.exists() {
             if let Ok(mut content) = fs::read_to_string(&config_file) {
                 let re_lang = regex::Regex::new(r"(?m)^Language=.*").unwrap();
                 let re_from = regex::Regex::new(r"(?m)^FromLanguage=.*").unwrap();
-
+                
                 content = re_lang.replace(&content, format!("Language={}", target_code)).to_string();
                 content = re_from.replace(&content, "FromLanguage=en").to_string();
-
+                
                 let _ = fs::write(&config_file, content);
                 let _ = tx.send(UiMsg::Log("[Unity] AutoTranslatorConfig.ini atualizado para o idioma escolhido.".into()));
             }
@@ -590,18 +590,18 @@ EnableFairyGUI=True", target_code, target_code);
         fs::write(&config_file, config_content).map_err(|e| format!("Falha criando AutoTranslatorConfig.ini: {e}"))?;
     }
     let _ = tx.send(UiMsg::Log(format!("[Unity] XUnity.AutoTranslator pronto: {}", xunity_plugin.display())));
-
+    
     // === COPIAR TRADUÇÃO PARA O BEPINEX ===
     let bepinex_text_dir = bepinex_dir
         .join("Translation")
         .join(api::get_lang_code(target_lang)) // e.g. 'pt'
         .join("Text");
-
+        
     // Forçar a criação da pasta caso o jogo ainda não tenha sido rodado
     if !bepinex_text_dir.exists() {
         let _ = fs::create_dir_all(&bepinex_text_dir);
     }
-
+    
     let bepinex_file = bepinex_text_dir.join("_AutoGeneratedTranslations.txt");
     if let Err(e) = fs::write(&bepinex_file, &dict_content) {
         let _ = tx.send(UiMsg::Log(format!("[Unity] Falha ao copiar dicionário para BepInEx: {}", e)));

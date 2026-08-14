@@ -73,7 +73,7 @@ let input_box = Entry::new();
 let button = Button::new();
 
 // We need to clone memory references before throwing into the move closure
-let ib = input_box.clone();
+let ib = input_box.clone(); 
 button.connect_clicked(move |_| {
     ib.set_text("Button clicked!");
 });

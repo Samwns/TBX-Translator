@@ -64,13 +64,13 @@ pub fn parse_dump_content(dump_content: &str) -> Vec<(String, String, String)> {
         if !trimmed.contains(' ') {
             let has_letters = trimmed.chars().any(|c| c.is_alphabetic());
             let has_numbers_or_underscore = trimmed.chars().any(|c| c.is_ascii_digit() || c == '_');
-
+            
             // Exceções: se for só número (já pego antes), ou se for algo normal.
             if has_letters && has_numbers_or_underscore {
                 continue;
             }
         }
-
+        
         // Ignorar textos que são APENAS formatação renpy (ex: "{b}{/b}")
         let text_no_tags = Regex::new(r"\{.*?\}").unwrap().replace_all(trimmed, "");
         if text_no_tags.trim().is_empty() {

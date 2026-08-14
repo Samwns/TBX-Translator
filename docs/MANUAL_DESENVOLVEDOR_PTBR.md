@@ -73,7 +73,7 @@ let input_caixa = Entry::new();
 let botao = Button::new();
 
 // Precisamos clonar as referências da memória antes de jogar no move closure
-let ic = input_caixa.clone();
+let ic = input_caixa.clone(); 
 botao.connect_clicked(move |_| {
     ic.set_text("Botão clicado!");
 });

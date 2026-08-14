@@ -214,7 +214,7 @@ impl TbxApp {
     /// Mantém os atalhos da comunidade fora da navegação principal.
     pub fn render_social_shortcuts(&mut self, ctx: &Context) {
         egui::Area::new(Id::new("social_shortcuts"))
-            .anchor(Align2::RIGHT_BOTTOM, vec2(-28.0, -26.0))
+            .anchor(Align2::RIGHT_BOTTOM, vec2(-14.0, -14.0))
             .order(Order::Middle)
             .show(ctx, |ui| {
                 Frame::none()
