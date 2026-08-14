@@ -35,6 +35,7 @@ impl TbxApp {
                 let text_color = if is_active { Color32::WHITE } else { Color32::from_rgb(166, 173, 200) };
 
                 let mut close_clicked = false;
+                let mut close_btn_rect = None;
                 let frame_resp = Frame::none()
                     .fill(bg_color)
                     .rounding(Rounding::same(6.0))
@@ -43,13 +44,19 @@ impl TbxApp {
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 6.0;
                             ui.label(RichText::new(&tab.title).color(text_color).strong());
-                            
+
                             if tab.closable {
-                                let close_btn = Button::new(RichText::new("X").color(Color32::from_rgb(243, 139, 168)))
-                                    .fill(Color32::TRANSPARENT)
-                                    .min_size(vec2(16.0, 16.0))
-                                    .stroke(Stroke::NONE);
-                                if ui.add(close_btn).clicked() {
+                                let (rect, response) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::click());
+                                close_btn_rect = Some(rect);
+
+                                if response.hovered() {
+                                    ui.painter().rect_filled(rect, Rounding::same(4.0), Color32::from_rgba_unmultiplied(243, 139, 168, 60));
+                                }
+
+                                let text_color = if response.hovered() { Color32::WHITE } else { Color32::from_rgb(243, 139, 168) };
+                                ui.painter().text(rect.center(), Align2::CENTER_CENTER, "X", FontId::proportional(12.0), text_color);
+
+                                if response.clicked() {
                                     tab_to_close = Some(idx);
                                     close_clicked = true;
                                 }
@@ -58,9 +65,19 @@ impl TbxApp {
                     }).response;
 
                 if !close_clicked {
-                    let interact_resp = ui.interact(frame_resp.rect, ui.id().with(format!("tab_interact_{}", idx)), Sense::click());
-                    if interact_resp.clicked() {
-                        self.active_log_tab = idx;
+                    let mut should_interact = true;
+                    if let Some(pos) = ui.ctx().pointer_hover_pos() {
+                        if let Some(rect) = close_btn_rect {
+                            if rect.contains(pos) {
+                                should_interact = false;
+                            }
+                        }
+                    }
+                    if should_interact {
+                        let interact_resp = ui.interact(frame_resp.rect, ui.id().with(format!("tab_interact_{}", idx)), Sense::click());
+                        if interact_resp.clicked() {
+                            self.active_log_tab = idx;
+                        }
                     }
                 }
             }

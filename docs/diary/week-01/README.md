@@ -86,7 +86,7 @@ Built a manual translation editor that allows users to review, edit, and save tr
 Full end-to-end testing of the Ren'Py extraction pipeline:
 
 1. **Injection:** `desired_python.py` is injected into the game's `renpy/` directory
-2. **Boot script:** `tpg_boot.rpy` is created to force the game to execute the dump script
+2. **Boot script (historical):** the original implementation created `tpg_boot.rpy`; current versions use `tbx_boot.rpy`.
 3. **Headless execution:** Game is run via `xvfb-run` (Linux) for ~15 seconds to generate text dumps
 4. **Parsing:** `dump.txt` is read and filtered
 5. **Variable protection:** Special markers are replaced with numeric placeholders before translation:

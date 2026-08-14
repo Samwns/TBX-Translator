@@ -39,17 +39,23 @@ impl TbxApp {
 
                     // Window controls: Minimize and Close
                     ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                        let close_btn = Button::new(RichText::new("X").size(14.0).color(Color32::from_rgb(243, 139, 168)))
-                            .fill(Color32::TRANSPARENT)
-                            .stroke(Stroke::NONE);
-                        if ui.add(close_btn).clicked() {
+                        let (close_rect, close_resp) = ui.allocate_exact_size(vec2(24.0, 24.0), Sense::click());
+                        if close_resp.hovered() {
+                            ui.painter().rect_filled(close_rect, Rounding::same(4.0), Color32::from_rgba_unmultiplied(243, 139, 168, 60));
+                        }
+                        let close_color = if close_resp.hovered() { Color32::WHITE } else { Color32::from_rgb(243, 139, 168) };
+                        ui.painter().text(close_rect.center(), Align2::CENTER_CENTER, "X", FontId::proportional(14.0), close_color);
+                        if close_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
 
-                        let min_btn = Button::new(RichText::new("—").size(14.0).color(Color32::from_rgb(166, 173, 200)))
-                            .fill(Color32::TRANSPARENT)
-                            .stroke(Stroke::NONE);
-                        if ui.add(min_btn).clicked() {
+                        let (min_rect, min_resp) = ui.allocate_exact_size(vec2(24.0, 24.0), Sense::click());
+                        if min_resp.hovered() {
+                            ui.painter().rect_filled(min_rect, Rounding::same(4.0), Color32::from_rgba_unmultiplied(166, 173, 200, 60));
+                        }
+                        let min_color = if min_resp.hovered() { Color32::WHITE } else { Color32::from_rgb(166, 173, 200) };
+                        ui.painter().text(min_rect.center(), Align2::CENTER_CENTER, "—", FontId::proportional(14.0), min_color);
+                        if min_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                         }
                     });
@@ -108,10 +114,10 @@ impl TbxApp {
                     };
 
                     // The tabs
-                    nav_tab(ui, AppTab::Translate, egui::include_image!("../../assets/folder_icon.svg"), t("aba_traduzir", lang), &mut self.current_tab, true, false);
-                    nav_tab(ui, AppTab::Logs, egui::include_image!("../../assets/logs_icon.svg"), t("aba_logs", lang), &mut self.current_tab, false, false);
-                    nav_tab(ui, AppTab::Tools, egui::include_image!("../../assets/tools_icon.svg"), t("aba_tools", lang), &mut self.current_tab, false, false);
-                    nav_tab(ui, AppTab::Settings, egui::include_image!("../../assets/settings_icon.svg"), t("aba_config", lang), &mut self.current_tab, false, true);
+                    nav_tab(ui, AppTab::Translate, egui::include_image!("../../assets/folder_icon.svg"), &t("aba_traduzir", lang), &mut self.current_tab, true, false);
+                    nav_tab(ui, AppTab::Logs, egui::include_image!("../../assets/logs_icon.svg"), &t("aba_logs", lang), &mut self.current_tab, false, false);
+                    nav_tab(ui, AppTab::Tools, egui::include_image!("../../assets/tools_icon.svg"), &t("aba_tools", lang), &mut self.current_tab, false, false);
+                    nav_tab(ui, AppTab::Settings, egui::include_image!("../../assets/settings_icon.svg"), &t("aba_config", lang), &mut self.current_tab, false, true);
 
                     // Contextual active tools (detached from segmented control)
                     if self.current_tab == AppTab::Editor {

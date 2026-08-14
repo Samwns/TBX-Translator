@@ -1,6 +1,6 @@
-# Developer Manual - TPG Translator
+# Developer Manual - TBX Translator
 
-This document details the inner workings, architecture, and use of the GTK4 library (via `gtk4-rs`) in the TPG Translator project.
+This document describes the internals and architecture of TBX Translator.
 
 ## General Architecture
 
@@ -26,7 +26,7 @@ The user can choose different tabs for Ren'Py and Unity. This choice defines the
 Depending on the tab, the "Translate" button passes commands to either `renpy_extractor` or `unity_extractor`.
 
 ### 3. Extraction and Translation (Ren'Py)
-1. **Injection:** The App inserts a `desired_python.py` script into the game's internal structure and modifies the loading sequence (e.g., `tpg_boot.rpy`) to force the game to read and "dump" all dialog and interface texts the first time it opens.
+1. **Injection:** The app temporarily inserts `tbx_dumper.rpy` to collect text and generates `tbx_boot.rpy` to integrate the translation without forcing the player's selected language.
 2. **Headless Execution:** The `renpy_extractor` starts the game executable hidden (`xvfb-run` on Linux, or silent arguments) just long enough for Python to run and generate a log containing the texts (`dump.txt`).
 3. **Parse and Filter:** The `dump.txt` file is read by Rust. Complex rules are applied to protect `{b}...{/b}` tags and `[player_name]` script variables. This is done by replacing them with temporary numerical markers (e.g., `777001777`) before sending them to the API.
 4. **Translation:** Text blocks are dispatched to `api.rs`, using multi-threading or sequential batches depending on the configuration.
@@ -73,7 +73,7 @@ let input_box = Entry::new();
 let button = Button::new();
 
 // We need to clone memory references before throwing into the move closure
-let ib = input_box.clone(); 
+let ib = input_box.clone();
 button.connect_clicked(move |_| {
     ib.set_text("Button clicked!");
 });

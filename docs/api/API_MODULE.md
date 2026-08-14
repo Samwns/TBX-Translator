@@ -1,4 +1,4 @@
-# TPG Translator - API Module Documentation
+# TBX Translator - API Module Documentation
 
 **Creator:** samwns
 

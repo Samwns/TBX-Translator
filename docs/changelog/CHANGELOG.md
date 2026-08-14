@@ -1,7 +1,33 @@
 # Changelog — TBX Translator
 
-Todas as mudanças notáveis deste projeto são documentadas aqui.  
+Todas as mudanças notáveis deste projeto são documentadas aqui.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+---
+
+## [Não lançado] — 2026-08-14
+
+### Adicionado
+
+- Atualizador interno para Windows portátil/instalado, AppImage, Debian, Fedora e Arch, com changelog das Releases do GitHub, progresso, SHA-256 e reinício automático.
+- Suporte completo à extração e injeção de traduções em jogos Godot, incluindo catálogos nativos, PO multilinha, diálogos binários e scripts de história.
+- Tradução em pacotes com concorrência global controlada, cache compartilhado e retentativas progressivas.
+- Execuções independentes para Ren'Py, Unity e Godot, cada uma com progresso, cancelamento e logs próprios.
+- Integração automática do idioma Ren'Py em menus dinâmicos ou listas estáticas, com seletor complementar para jogos sem menu de idiomas.
+
+### Alterado
+
+- O Ren'Py não força mais `config.language` nem altera diretamente `_preferences.language`; a escolha passa a ser feita pelo jogador com a ação oficial `Language(...)`.
+- Variáveis, interpolações e tags Ren'Py são removidas da carga enviada à API e recolocadas nas posições originais.
+- Os 104 idiomas da interface foram completados com as mensagens do atualizador.
+- O número do build das GitHub Actions agora é incorporado ao executável.
+
+### Corrigido
+
+- Limpeza automática de diretórios temporários e scripts que ainda usavam o prefixo legado `tpg_`.
+- Captura indevida de textos das ferramentas internas de desenvolvimento do Ren'Py.
+- Preservação de BBCode, espaços e tags durante traduções Godot.
+- Seleção de arquivos no Linux para pacotes AppImage e Debian.
 
 ---
 

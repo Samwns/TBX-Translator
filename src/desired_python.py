@@ -1,18 +1,25 @@
 init python:
-    def tpg_dump():
+    def tbx_dump():
         try:
             import os
-            path = os.path.join(config.basedir, 'game', 'tl', 'tpg_temp', 'dump.txt')
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, 'w', encoding='utf-8') as f:
+            import io
+            path = os.path.join(config.basedir, 'game', 'tl', 'tbx_temp', 'dump.txt')
+            try:
+                os.makedirs(os.path.dirname(path))
+            except Exception:
+                pass
+            with io.open(path, 'w', encoding='utf-8') as f:
                 def extract_strings_from_obj(obj, seen=None, depth=0):
                     if seen is None: seen = set()
                     if id(obj) in seen: return set()
                     seen.add(id(obj))
                     texts = set()
-                    if depth > 20: return texts
+                    if depth > 5: return texts
                     if isinstance(obj, str):
-                        if len(obj) > 1 and len(obj) < 800: texts.add(obj)
+                        clean_obj = obj.strip()
+                        if len(clean_obj) > 1 and len(clean_obj) < 800:
+                            if not clean_obj.startswith('#') and not clean_obj.startswith('gui/') and not clean_obj.startswith('http'):
+                                texts.add(obj)
                         return texts
                     if isinstance(obj, (list, tuple, set)):
                         for item in obj:
@@ -24,7 +31,7 @@ init python:
                     else:
                         if hasattr(obj, '__dict__'):
                             for k, v in obj.__dict__.items():
-                                if k not in ('filename', 'name', 'loc', 'code', 'source', 'location', 'linenumber'):
+                                if k not in ('filename', 'name', 'loc', 'code', 'source', 'location', 'linenumber', 'parameters', 'arguments', 'properties', 'expr'):
                                     texts.update(extract_strings_from_obj(v, seen, depth+1))
                         if hasattr(obj, '__slots__'):
                             for slot in obj.__slots__:
@@ -39,8 +46,8 @@ init python:
                     try:
                         filename = s.filename.replace('\\', '/')
                         if 'renpy/common/' in filename: continue
-                        if filename.endswith('/tpg_dumper.rpy') or filename.endswith('/tpg_boot.rpy'): continue
-                        if 'game/tl/tpg_temp/' in filename or 'game/tl/tpg_temp_portuguese/' in filename: continue
+                        if filename.endswith('/tbx_dumper.rpy') or filename.endswith('/tbx_boot.rpy'): continue
+                        if 'game/tl/tbx_temp/' in filename or 'game/tl/tbx_temp_portuguese/' in filename: continue
                         if 'game/tl/' in filename:
                             rel_tl = filename.split('game/tl/', 1)[1]
                             rel_parts = rel_tl.split('/')
@@ -115,7 +122,7 @@ init python:
                     for file in files:
                         if file.endswith('.rpy'):
                             try:
-                                with open(os.path.join(root, file), 'r', encoding='utf-8') as rf:
+                                with io.open(os.path.join(root, file), 'r', encoding='utf-8') as rf:
                                     content = rf.read()
                                     import base64
                                     pat = base64.b64decode(b'X1woXHMqKFtcJ1x4MjJdKSguKj8pXDFccypcKQ==').decode('utf-8')
@@ -126,16 +133,10 @@ init python:
                             except:
                                 pass
 
-                if hasattr(renpy.display, 'screen') and hasattr(renpy.display.screen, 'screens'):
-                    all_str = set()
-                    for key, screen_obj in renpy.display.screen.screens.items():
-                        all_str.update(extract_strings_from_obj(screen_obj))
-                    for txt in all_str:
-                        if txt.strip():
-                            clean = txt
-                            if clean.startswith('"') and clean.endswith('"'): clean = clean[1:-1]
-                            elif clean.startswith("'") and clean.endswith("'"): clean = clean[1:-1]
-                            f.write('screens.rpy|||interface|||' + clean.replace('\n', '\\n').replace('\r', '') + '\n')
+                # Do not crawl renpy.display.screen.screens here. That registry
+                # also contains Ren'Py developer tools (warper/spline/action
+                # editors), which are not part of the game. Game screens were
+                # already collected from their AST nodes above.
         except Exception as e:
             import traceback
             with open(os.path.join(config.basedir, 'game', 'error.log'), 'w') as err:
@@ -143,4 +144,4 @@ init python:
         finally:
             import sys
             sys.exit(0)
-    config.start_callbacks.append(tpg_dump)
+    config.start_callbacks.append(tbx_dump)

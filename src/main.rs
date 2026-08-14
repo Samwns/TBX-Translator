@@ -7,12 +7,17 @@ mod types;
 mod app_config;
 mod api;
 mod renpy_extractor;
+mod renpy_parser;
 mod unity_extractor;
+mod godot_pck;
+pub mod godot_extractor;
 mod editor_ui;
 mod font_injector;
 pub mod dictionary;
+mod locales_gen;
 mod i18n;
 mod paths;
+mod updater;
 mod ui;
 
 fn load_icon() -> Option<std::sync::Arc<egui::IconData>> {
@@ -30,6 +35,7 @@ fn load_icon() -> Option<std::sync::Arc<egui::IconData>> {
     }
 }
 
-fn main() -> Result<(), eframe::Error> {
+#[tokio::main]
+async fn main() -> Result<(), eframe::Error> {
     ui::run_app(load_icon())
 }

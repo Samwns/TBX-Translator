@@ -10,6 +10,8 @@ fi
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
 export PATH="/mingw64/bin:/c/Program Files/dotnet:$PATH"
+VERSION="$(sed -nE 's/^version = "([^"]+)"/\1/p' Cargo.toml | head -n 1)"
+export TBX_PACKAGE_VERSION="$VERSION"
 
 need() {
     command -v "$1" >/dev/null 2>&1 || {

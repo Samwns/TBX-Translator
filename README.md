@@ -5,12 +5,12 @@
 
   **Ferramenta desktop para extrair, traduzir e injetar textos em jogos Ren'Py e Unity, godot e unreal.**
 
-  **Versão: `0.0.1-alpha`**
+  **Versão: `0.0.2-alpha`**
 
   [![Release](https://img.shields.io/github/v/release/Samwns/TBX-Translator?display_name=tag&sort=semver)](https://github.com/Samwns/TBX-Translator/releases/latest)
   [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](LICENSE)
   [![Rust](https://img.shields.io/badge/Rust-2021-orange?logo=rust)](https://www.rust-lang.org/)
-  [![GTK4](https://img.shields.io/badge/GTK-4-7FE719?logo=gtk)](https://www.gtk.org/)
+  [![Egui](https://img.shields.io/badge/egui-0.29-blue)](https://github.com/emilk/egui)
 
   [Português](#sobre) · [English](#about)
   [![Apoie no Ko-fi](https://img.shields.io/badge/Ko--fi-Apoiar%20o%20projeto-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/samwns)
@@ -18,7 +18,7 @@
 
 ## Sobre
 
-O TBX Translator é uma aplicação desktop nativa, feita em Rust e GTK4, para
+O TBX Translator é uma aplicação desktop nativa, feita em Rust e Egui, para
 automatizar a localização de jogos. Ela extrai textos, traduz via Google
 Translate, permite a revisão manual e prepara a injeção no jogo.
 
@@ -29,19 +29,19 @@ Translate, permite a revisão manual e prepara a injeção no jogo.
 - Editor visual para revisar arquivos `.rpy`, `.txt` e `.json`
 - Proteção de variáveis, tags e formatação durante a tradução
 - Injeção de fontes para caracteres acentuados
-- Interface GTK4 nativa, sem Electron, WebView ou navegador embutido
+- Interface Egui nativa, sem Electron, WebView ou navegador embutido
 - Interface em português e configurações persistentes locais
 
 ## Executar no Linux
 
-Instale GTK4, Rust e .NET SDK 8 para usar também o extrator Unity:
+Instale dependências do sistema (para compilação), Rust e .NET SDK 8 para usar também o extrator Unity:
 
 ```bash
 # Fedora
-sudo dnf install gtk4-devel dotnet-sdk-8.0
+sudo dnf install dotnet-sdk-8.0
 
 # Debian/Ubuntu
-sudo apt install libgtk-4-dev dotnet-sdk-8.0
+sudo apt install dotnet-sdk-8.0 libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
 
 cargo run
 ```
@@ -60,15 +60,15 @@ cargo build --release
 O workflow **Create release** gera os dois pacotes portáteis:
 
 - `TBX-Translator-Linux-x64.tar.gz`, com o executável `TBX-Translator`;
-- `TBX-Translator-Windows-x64.zip`, com `TBX-Translator.exe`, ícone e DLLs GTK4.
+- `TBX-Translator-Windows-x64.zip`, com `TBX-Translator.exe` e ícone.
 
 Ambos incluem os assets, o extrator Unity auto-contido e os ZIPs do
-BepInEx/XUnity. No Linux, é necessário ter o runtime GTK4 instalado. Para
+BepInEx/XUnity. Para
 publicar, envie uma tag:
 
 ```bash
-git tag v0.0.1-alpha
-git push origin v0.0.1-alpha
+git tag v0.0.2-alpha
+git push origin v0.0.2-alpha
 ```
 
 Ou execute o workflow manualmente na aba **Actions** do GitHub. Ao fim, a mesma
@@ -102,7 +102,7 @@ Se o TBX Translator ajudar você, considere apoiar seu desenvolvimento no Ko-fi:
 
 ## About
 
-TBX Translator is a native Rust and GTK4 desktop application that automates
+TBX Translator is a native Rust and Egui desktop application that automates
 game localization. It extracts text, translates it through Google Translate,
 allows manual review, and prepares the translation for injection into the game.
 
@@ -113,19 +113,19 @@ allows manual review, and prepares the translation for injection into the game.
 - Visual editor for reviewing `.rpy`, `.txt`, and `.json` files
 - Variable, tag, and formatting protection during translation
 - Font injection for accented characters
-- Native GTK4 interface, with no Electron, WebView, or embedded browser
+- Native Egui interface, with no Electron, WebView, or embedded browser
 - Portuguese interface and persistent local settings
 
 ## Run on Linux
 
-Install GTK4, Rust, and the .NET SDK 8 to use the Unity extractor too:
+Install system dependencies (for building), Rust, and the .NET SDK 8 to use the Unity extractor too:
 
 ```bash
 # Fedora
-sudo dnf install gtk4-devel dotnet-sdk-8.0
+sudo dnf install dotnet-sdk-8.0
 
 # Debian/Ubuntu
-sudo apt install libgtk-4-dev dotnet-sdk-8.0
+sudo apt install dotnet-sdk-8.0 libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
 
 cargo run
 ```
@@ -144,11 +144,10 @@ the additional AssetBundle/Addressables scan.
 The **Create release** workflow produces both portable packages:
 
 - `TBX-Translator-Linux-x64.tar.gz`, containing the `TBX-Translator` executable;
-- `TBX-Translator-Windows-x64.zip`, containing `TBX-Translator.exe`, its icon,
-  and GTK4 DLLs.
+- `TBX-Translator-Windows-x64.zip`, containing `TBX-Translator.exe` and its icon.
 
 Both include assets, the self-contained Unity extractor, and BepInEx/XUnity ZIP
-files. Linux requires the GTK4 runtime to be installed. To publish, push a tag
+files. To publish, push a tag
 or manually run **Create release** from GitHub **Actions**. The resulting GitHub
 release contains both downloads.
 

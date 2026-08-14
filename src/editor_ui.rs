@@ -57,7 +57,7 @@ impl EditorState {
         Self::default()
     }
 
-    pub fn load_directory(&mut self, base_game_path: &str, folder_name: &str, is_unity: bool) {
+    pub fn load_directory(&mut self, base_game_path: &str, folder_name: &str, engine_mode: u8) {
         self.files.clear();
         self.selected_file_index = None;
         self.status_message = None;
@@ -70,9 +70,12 @@ impl EditorState {
             base_path
         };
 
-        let target_dir = if is_unity {
+        let target_dir = if engine_mode == 1 {
             let safe_name = if folder_name.trim().is_empty() { "portuguese" } else { folder_name.trim() };
             parent_dir.join(format!("TBX_Workspace_{}", safe_name))
+        } else if engine_mode == 2 {
+            let safe_name = if folder_name.trim().is_empty() { "portuguese" } else { folder_name.trim() };
+            parent_dir.join(format!("TBX_Workspace_Godot_{}", safe_name))
         } else {
             let safe_folder = if folder_name.trim().is_empty() { "portuguese" } else { folder_name.trim() };
             parent_dir.join("game").join("tl").join(safe_folder)

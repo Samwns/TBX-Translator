@@ -1,7 +1,7 @@
-# TPG Translator - Architecture Report
+# TBX Translator - Architecture Report
 
 ## Overview
-This document outlines the new architectural design of the TPG Translator. Due to rendering bugs and broken visual fidelity issues with the previous Tauri (Web-based) approach, the application has been entirely rewritten using a pure, native Rust approach powered by **GTK4**.
+This document outlines the architecture of TBX Translator, implemented in Rust with **egui/eframe**.
 
 ## Why Native GTK4?
 1. **Performance & Reliability:** Unlike Electron or Tauri, GTK4 does not require an embedded web browser (WebView). The UI is compiled down to native machine code.
@@ -26,7 +26,7 @@ To build a release optimized executable:
 ```bash
 cargo build --release
 ```
-*The resulting binary will be located in `target/release/tpg-translator`.*
+*The resulting binary will be located in `target/release/tbx-translator`.*
 
 ## Future Work
 - **Async UI Bridging:** Use `glib::MainContext::channel()` to allow background `tokio` threads (doing the translation/extraction) to safely update GTK progress labels in the main UI thread.

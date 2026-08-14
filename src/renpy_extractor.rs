@@ -1,4 +1,4 @@
-// TPG Translator - renpy_extractor.rs
+// TBX Translator - renpy_extractor.rs
 // Creator: samwns
 // Ren'Py extractor: injects a Python dump script, runs the game invisibly,
 // reads the dump, and sends batches to the translation API.
@@ -11,9 +11,216 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use regex::Regex;
 use tokio::time::sleep;
+use walkdir::WalkDir;
 
 use crate::api;
 use crate::ui::UiMsg;
+
+enum RenpyTextPart {
+    Fixed(String),
+    Translatable(usize),
+}
+
+const RENPY_CONTROL_PATTERN: &str =
+    r"(?m)(\{[^{}\r\n]{0,120}\}|\[[^\[\]\r\n]{0,80}\]|^[A-Za-z_][A-Za-z0-9_]*=[^{}\r\n]{1,80}\})";
+
+pub fn language_identifier(folder: &str) -> String {
+    let mut identifier = String::new();
+    for character in folder.trim().chars() {
+        let normalized = if character.is_ascii_alphanumeric() {
+            character.to_ascii_lowercase()
+        } else {
+            '_'
+        };
+        if normalized != '_' || !identifier.ends_with('_') {
+            identifier.push(normalized);
+        }
+    }
+    let identifier = identifier.trim_matches('_').to_string();
+    let mut identifier = if identifier.is_empty() {
+        "portuguese".to_string()
+    } else {
+        identifier
+    };
+    if identifier
+        .chars()
+        .next()
+        .is_some_and(|character| character.is_ascii_digit())
+    {
+        identifier.insert_str(0, "lang_");
+    }
+    identifier
+}
+
+fn integrate_language_menu(
+    game_dir: &Path,
+    language_id: &str,
+    language_label: &str,
+) -> Result<(usize, bool), String> {
+    let marker = format!("# TBX_LANGUAGE_OPTION:{language_id}");
+    let language_call = Regex::new(&format!(
+        r#"Language\s*\(\s*["']{}["']"#,
+        regex::escape(language_id)
+    ))
+    .map_err(|error| error.to_string())?;
+    let mut patched_menus = 0usize;
+    let mut dynamic_menu_found = false;
+
+    for entry in WalkDir::new(game_dir)
+        .into_iter()
+        .filter_entry(|entry| {
+            let name = entry.file_name().to_string_lossy();
+            name != "tl" && name != "cache" && name != "saves"
+        })
+        .filter_map(Result::ok)
+    {
+        let path = entry.path();
+        if !path.is_file()
+            || path.extension().and_then(|value| value.to_str()) != Some("rpy")
+            || path.file_name().and_then(|value| value.to_str()).is_some_and(|name| {
+                name.starts_with("tbx_") || name.starts_with("tpg_")
+            })
+        {
+            continue;
+        }
+
+        let Ok(content) = fs::read_to_string(path) else { continue };
+        if content.contains("renpy.known_languages()") {
+            dynamic_menu_found = true;
+            continue;
+        }
+        if content.contains(&marker) || language_call.is_match(&content) {
+            patched_menus += 1;
+            continue;
+        }
+
+        let newline = if content.contains("\r\n") { "\r\n" } else { "\n" };
+        let lines: Vec<&str> = content.lines().collect();
+        let mut language_buttons = Vec::new();
+        for (index, line) in lines.iter().enumerate() {
+            let trimmed = line.trim_start();
+            if !trimmed.starts_with("textbutton") {
+                continue;
+            }
+            let button_indent = line.len() - trimmed.len();
+            let indent = line[..button_indent].to_string();
+            if trimmed.contains("action") && trimmed.contains("Language(") {
+                language_buttons.push((index, index, indent));
+                continue;
+            }
+
+            // Also recognize block-style buttons:
+            // textbutton "English":
+            //     action Language(None)
+            let mut end = index;
+            let mut has_language_action = false;
+            for (next_index, next_line) in lines.iter().enumerate().skip(index + 1) {
+                let next_trimmed = next_line.trim_start();
+                let next_indent = next_line.len() - next_trimmed.len();
+                if !next_trimmed.is_empty() && next_indent <= button_indent {
+                    break;
+                }
+                end = next_index;
+                if next_trimmed.starts_with("action") && next_trimmed.contains("Language(") {
+                    has_language_action = true;
+                }
+            }
+            if has_language_action {
+                language_buttons.push((index, end, indent));
+            }
+        }
+        if language_buttons.is_empty() {
+            continue;
+        }
+
+        let mut group_ends: Vec<(usize, String)> = Vec::new();
+        for (position, (_, end, indent)) in language_buttons.iter().enumerate() {
+            let next_is_same_group = language_buttons.get(position + 1).is_some_and(|next| {
+                next.0 <= *end + 2 && next.2.as_str() == indent.as_str()
+            });
+            if !next_is_same_group {
+                group_ends.push((*end, indent.clone()));
+            }
+        }
+
+        let mut rewritten = String::with_capacity(content.len() + group_ends.len() * 120);
+        for (index, line) in lines.iter().enumerate() {
+            rewritten.push_str(line);
+            rewritten.push_str(newline);
+            if let Some((_, indent)) = group_ends.iter().find(|(end, _)| *end == index) {
+                rewritten.push_str(indent);
+                rewritten.push_str(&marker);
+                rewritten.push_str(newline);
+                rewritten.push_str(indent);
+                rewritten.push_str(&format!(
+                    "textbutton \"{}\" action Language(\"{}\")",
+                    escape_renpy(language_label),
+                    escape_renpy(language_id)
+                ));
+                rewritten.push_str(newline);
+                patched_menus += 1;
+            }
+        }
+
+        let backup_name = format!(
+            "{}.tbx_backup",
+            path.file_name().and_then(|value| value.to_str()).unwrap_or("screen.rpy")
+        );
+        let backup = path.with_file_name(backup_name);
+        if !backup.exists() {
+            fs::copy(path, &backup).map_err(|error| {
+                format!("Falha ao criar backup de {}: {error}", path.display())
+            })?;
+        }
+        fs::write(path, rewritten)
+            .map_err(|error| format!("Falha ao atualizar {}: {error}", path.display()))?;
+    }
+
+    Ok((patched_menus, dynamic_menu_found))
+}
+
+fn split_renpy_text(
+    text: &str,
+    control_re: &Regex,
+    translatable: &mut Vec<String>,
+) -> Vec<RenpyTextPart> {
+    let mut parts = Vec::new();
+    let mut cursor = 0usize;
+    for control in control_re.find_iter(text) {
+        if control.start() > cursor {
+            let visible = &text[cursor..control.start()];
+            if !visible.is_empty() {
+                let index = translatable.len();
+                translatable.push(visible.to_string());
+                parts.push(RenpyTextPart::Translatable(index));
+            }
+        }
+        parts.push(RenpyTextPart::Fixed(control.as_str().to_string()));
+        cursor = control.end();
+    }
+    if cursor < text.len() {
+        let visible = &text[cursor..];
+        let index = translatable.len();
+        translatable.push(visible.to_string());
+        parts.push(RenpyTextPart::Translatable(index));
+    }
+    parts
+}
+
+fn rebuild_renpy_text(parts: &[RenpyTextPart], translations: &[String]) -> String {
+    let mut rebuilt = String::new();
+    for part in parts {
+        match part {
+            RenpyTextPart::Fixed(value) => rebuilt.push_str(value),
+            RenpyTextPart::Translatable(index) => {
+                if let Some(value) = translations.get(*index) {
+                    rebuilt.push_str(value);
+                }
+            }
+        }
+    }
+    rebuilt
+}
 
 // The Python injection script is embedded at compile time
 const DUMP_SCRIPT: &str = include_str!("desired_python.py");
@@ -25,8 +232,8 @@ pub async fn extract_texts(
     target_lang: &str,
     keep_structure: bool,
     translate_character_names: bool,
-    _threads: u32,
-    api_engine: &str,
+    threads: u32,
+    _api_engine: &str,
     tx: std::sync::mpsc::Sender<UiMsg>,
     cancelled: Arc<AtomicBool>,
     overwrite: bool,
@@ -41,8 +248,9 @@ pub async fn extract_texts(
         return Err("A pasta 'game' não foi encontrada próximo ao executável.".to_string());
     }
 
-    let tl_dir = game_dir.join("tl").join(translation_folder);
-    let temp_dir = game_dir.join("tl").join("tpg_temp");
+    let language_id = language_identifier(translation_folder);
+    let tl_dir = game_dir.join("tl").join(&language_id);
+    let temp_dir = game_dir.join("tl").join("tbx_temp");
 
     // Cleanup
     if overwrite {
@@ -53,65 +261,88 @@ pub async fn extract_texts(
     fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
 
     // Remove old injection artifacts
-    for name in &["tpg_boot.rpy", "tpg_boot.rpyc", "tpg_dumper.rpy", "tpg_dumper.rpyc"] {
+    for name in &[
+        "tbx_boot.rpy", "tbx_boot.rpyc", "tbx_dumper.rpy", "tbx_dumper.rpyc",
+        "tpg_boot.rpy", "tpg_boot.rpyc", "tpg_dumper.rpy", "tpg_dumper.rpyc"
+    ] {
         let _ = fs::remove_file(game_dir.join(name));
     }
+    let legacy_temp_root = game_dir.join("tl");
+    if let Ok(entries) = fs::read_dir(&legacy_temp_root) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+            if name == "tpg_temp" || name.starts_with("tpg_temp_") {
+                let _ = fs::remove_dir_all(entry.path());
+            }
+        }
+    }
+    if language_id != translation_folder.trim() {
+        let _ = tx.send(UiMsg::Log(format!(
+            "[Ren'Py] Nome do idioma normalizado para '{}' (identificador compatível com Ren'Py).",
+            language_id
+        )));
+    }
+
+    // Fast Rust Parser check (Removed direct RPY scanning based on user request)
+    let mut candidates: Vec<(String, String, String)> = Vec::new();
+
+    let _ = tx.send(UiMsg::Log("[Motor Dump] Preparando injeção via Python...".into()));
 
     // Write injection script
-    let injection_script = game_dir.join("tpg_dumper.rpy");
+    let injection_script = game_dir.join("tbx_dumper.rpy");
     fs::write(&injection_script, DUMP_SCRIPT).map_err(|e| e.to_string())?;
-    let _ = tx.send(UiMsg::Log("[Motor Dump] Script de injeção escrito. Iniciando jogo...".into()));
+    let _ = tx.send(UiMsg::Log("[Motor Dump] Script de injeção escrito. Iniciando jogo invisível...".into()));
 
     // Spawn game process
     let mut proc = spawn_renpy_hidden(executable).map_err(|e| format!("Falha ao iniciar o jogo: {}", e))?;
 
-    // Wait for game to finish or cancellation
-    loop {
-        if cancelled.load(Ordering::SeqCst) {
-            let _ = proc.kill();
-            let _ = fs::remove_file(&injection_script);
-            let _ = tx.send(UiMsg::Log("[Aviso] Extração cancelada pelo usuário.".into()));
-            return Ok(());
-        }
-        match proc.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) => sleep(Duration::from_millis(100)).await,
-            Err(e) => return Err(format!("Erro ao monitorar processo: {}", e)),
-        }
-    }
+        // Wait for game to finish or cancellation
+        let mut wait_after_exit = 0;
+        let dump_file = temp_dir.join("dump.txt");
+        let mut was_cancelled = false;
 
-    let dump_file = temp_dir.join("dump.txt");
-    if !dump_file.exists() {
-        return Err("Falha: O jogo fechou sem gerar o arquivo dump.txt.".to_string());
-    }
+        loop {
+            if cancelled.load(Ordering::SeqCst) {
+                let _ = proc.kill();
+                let _ = fs::remove_file(&injection_script);
+                let _ = tx.send(UiMsg::Log("[Aviso] Extração cancelada pelo usuário.".into()));
+                was_cancelled = true;
+                break;
+            }
 
-    // Parse dump
+            if dump_file.exists() {
+                sleep(Duration::from_millis(1000)).await; // wait for file to flush
+                let _ = proc.kill(); // clean up if wrapper lingered
+                break;
+            }
+
+            match proc.try_wait() {
+                Ok(Some(_)) => {
+                    wait_after_exit += 1;
+                    if wait_after_exit > 30 { // 15 seconds wait after process exited
+                        return Err("Falha: O jogo fechou sem gerar o arquivo dump.txt. (Talvez o jogo tenha crashado. Verifique tbx_renpy.log)".to_string());
+                    }
+                },
+                Ok(None) => {
+                    // Still running
+                },
+                Err(e) => return Err(format!("Erro ao monitorar processo: {}", e)),
+            }
+            sleep(Duration::from_millis(500)).await;
+        }
+
+        // Parse dump using the advanced Rust Parser
     let dump_content = fs::read_to_string(&dump_file).map_err(|e| e.to_string())?;
-    let mut candidates: Vec<(String, String, String)> = Vec::new(); // (text, file, type)
 
-    for line in dump_content.lines() {
-        let parts: Vec<&str> = line.splitn(3, "|||").collect();
-        if parts.len() == 3 {
-            let text = normalize_dump_text(parts[2]);
-            candidates.push((text, parts[0].to_string(), parts[1].to_string()));
-        } else if parts.len() == 2 {
-            let text = normalize_dump_text(parts[1]);
-            candidates.push((text, parts[0].to_string(), "dialogo".to_string()));
-        }
-    }
+    candidates = crate::renpy_parser::parse_dump_content(&dump_content);
 
-    let _ = tx.send(UiMsg::Log(format!("[Diagnóstico] Dump: {} linhas brutas, {} candidatos", dump_content.lines().count(), candidates.len())));
+    let _ = tx.send(UiMsg::Log(format!("[Diagnóstico] Dump Engine: {} linhas brutas, {} candidatos limpos e parseados.", dump_content.lines().count(), candidates.len())));
 
     // Filter + deduplicate
     let mut seen: HashSet<String> = HashSet::new();
     let mut dialogues: Vec<(String, String, String)> = Vec::new();
 
     for (text, file, kind) in candidates {
-        if kind != "interface" {
-            if let Some(_reason) = filter_reason(&text) {
-                continue;
-            }
-        }
         if kind == "nome" && !translate_character_names {
             continue;
         }
@@ -123,25 +354,22 @@ pub async fn extract_texts(
     let _ = tx.send(UiMsg::Log(format!("[Extração] {} textos únicos para traduzir.", dialogues.len())));
 
     let total = dialogues.len();
-    let batch_size = 20usize;
+    let batch_size = 64usize;
     let mut processed = 0usize;
 
     // File writers
     let mut writers: HashMap<String, Vec<(String, String)>> = HashMap::new();
 
     let client = reqwest::Client::new();
-    let src_code = api::get_lang_code(source_lang);
+    let mut src_code = api::get_lang_code(source_lang);
     let tgt_code = api::get_lang_code(target_lang);
-    let api_url = if api_engine.contains("Apps Script") {
-        "" // future extension
-    } else {
-        "Integrado"
-    };
-
+    let mut detected_mismatch = false;
+    let mut detection_attempts = 0;
     // Separate items that can be resolved instantly via standard dictionary
     // from items that need online translation API
     let mut to_translate_indices: Vec<usize> = Vec::new();
     let mut resolved_translations: Vec<Option<String>> = vec![None; dialogues.len()];
+    let mut was_cancelled = false;
 
     for (idx, (text, _, _)) in dialogues.iter().enumerate() {
         if let Some(std_trans) = crate::dictionary::lookup(text, tgt_code) {
@@ -156,25 +384,54 @@ pub async fn extract_texts(
         let _ = tx.send(UiMsg::Log(format!("[Dicionário Padrão] {} termos de interface/menu pré-traduzidos instantaneamente.", dict_hits)));
     }
 
+    // Ren'Py commands and interpolation variables are never sent to the API.
+    // The third alternative also catches malformed dumps such as `sc=4}Text`.
+    let renpy_control_re = Regex::new(RENPY_CONTROL_PATTERN).unwrap();
+
     for chunk_indices in to_translate_indices.chunks(batch_size) {
-        if cancelled.load(Ordering::SeqCst) { break; }
+        if cancelled.load(Ordering::SeqCst) {
+            was_cancelled = true;
+            let _ = tx.send(UiMsg::Log("[Aviso] Cancelamento solicitado pelo usuário...".to_string()));
+            break;
+        }
 
         let chunk_items: Vec<&(String, String, String)> = chunk_indices.iter()
             .map(|&idx| &dialogues[idx])
             .collect();
 
-        let texts: Vec<String> = chunk_items.iter()
-            .map(|(t, _, _)| protect_renpy_tags(t))
+        let mut texts = Vec::new();
+        let prepared: Vec<Vec<RenpyTextPart>> = chunk_items
+            .iter()
+            .map(|(text, _, _)| split_renpy_text(text, &renpy_control_re, &mut texts))
             .collect();
 
-        let translated = api::translate_batch(&client, &texts, api_url, src_code, tgt_code).await
+        if !detected_mismatch && src_code != "auto" && detection_attempts < 15 {
+            if let Some(sample) = texts.iter().filter(|t| t.len() > 15).max_by_key(|t| t.len()) {
+                detection_attempts += 1;
+                if let Some(detected) = api::detect_language(&client, sample).await {
+                    let _ = tx.send(UiMsg::Log(format!("[DEBUG] Detectando idioma de '{}'... Resultado: {}", sample, detected)));
+                    if detected != src_code && detected != "auto" {
+                        src_code = api::get_lang_code(crate::api::get_lang_name(&detected));
+                        let _ = tx.send(UiMsg::DetectedLanguageMismatch(detected));
+                        detected_mismatch = true;
+                    }
+                }
+            }
+        }
+
+        let translated = api::translate_batch_concurrent(&client, &texts, src_code, tgt_code, threads as usize).await
             .unwrap_or_else(|_| vec![]);
 
         for (i, &orig_idx) in chunk_indices.iter().enumerate() {
             let (original, _, _) = &dialogues[orig_idx];
-            let raw = translated.get(i).cloned().unwrap_or_default();
+            let raw = if translated.len() == texts.len() {
+                rebuild_renpy_text(&prepared[i], &translated)
+            } else {
+                original.clone()
+            };
             let raw = if raw.trim().is_empty() { original.clone() } else { raw.trim().to_string() };
-            let trad = restore_renpy_tags(&raw, original);
+            let trad = raw;
+            let _ = tx.send(UiMsg::Log(format!("  [OK] {} -> {}", original.replace('\n', " "), trad.replace('\n', " "))));
             resolved_translations[orig_idx] = Some(trad);
         }
 
@@ -193,7 +450,6 @@ pub async fn extract_texts(
             "script.rpy".to_string()
         };
 
-        let _ = tx.send(UiMsg::Log(format!("  [OK] {} -> {}", original.replace('\n', " "), trad.replace('\n', " "))));
         writers.entry(target_file).or_default().push((original.clone(), trad));
     }
 
@@ -203,7 +459,7 @@ pub async fn extract_texts(
         if let Some(parent) = out_path.parent() {
             let _ = fs::create_dir_all(parent);
         }
-        let mut content = format!("translate {} strings:\n\n", translation_folder);
+        let mut content = format!("translate {} strings:\n\n", language_id);
         for (original, trad) in pairs {
             content.push_str(&format!("    old \"{}\"\n", escape_renpy(original)));
             content.push_str(&format!("    new \"{}\"\n\n", escape_renpy(trad)));
@@ -212,119 +468,155 @@ pub async fn extract_texts(
         let _ = tx.send(UiMsg::Log(format!("   -> {} criado.", target_file)));
     }
 
-    // Write boot patch
-    let boot_script = game_dir.join("tpg_boot.rpy");
+    // Register an optional language without overriding the player's current
+    // preference. The generated overlay gives games without a language menu a
+    // safe selector and lists every language already known by Ren'Py.
+    let boot_script = game_dir.join("tbx_boot.rpy");
+    let language_label_name = api::get_lang_name(api::get_lang_code(target_lang));
+    let (patched_menus, dynamic_menu_found) =
+        match integrate_language_menu(&game_dir, &language_id, language_label_name) {
+            Ok(result) => result,
+            Err(error) => {
+                let _ = tx.send(UiMsg::Log(format!(
+                    "[Ren'Py Aviso] Não foi possível integrar o menu original: {error}. Usando seletor complementar."
+                )));
+                (0, false)
+            }
+        };
+    let use_fallback_selector = patched_menus == 0 && !dynamic_menu_found;
+    if dynamic_menu_found {
+        let _ = tx.send(UiMsg::Log(format!(
+            "[Ren'Py] O menu usa renpy.known_languages(); '{}' será listado automaticamente.",
+            language_id
+        )));
+    } else if patched_menus > 0 {
+        let _ = tx.send(UiMsg::Log(format!(
+            "[Ren'Py] Idioma '{}' integrado em {} lista(s) de idiomas existente(s).",
+            language_id, patched_menus
+        )));
+    } else {
+        let _ = tx.send(UiMsg::Log(
+            "[Ren'Py] O jogo não possui lista de idiomas editável; seletor complementar instalado.".to_string(),
+        ));
+    }
+
+    let language_label = escape_renpy(language_label_name);
+    let escaped_language_id = escape_renpy(&language_id);
+    let fallback_flag = if use_fallback_selector { "True" } else { "False" };
     let boot_content = format!(
-        "init 999 python:\n\
-         \x20   try:\n\
-         \x20       _preferences.language = \"{0}\"\n\
-         \x20   except:\n\
-         \x20       pass\n\
-         \x20   try:\n\
-         \x20       config.language = \"{0}\"\n\
-         \x20   except:\n\
-         \x20       pass\n\
-         \x20   try:\n\
-         \x20       def tpg_translate_filter(txt):\n\
-         \x20           if txt:\n\
-         \x20               try:\n\
-         \x20                   return __(txt)\n\
-         \x20               except:\n\
-         \x20                   pass\n\
-         \x20           return txt\n\
-         \x20       config.say_menu_text_filter = tpg_translate_filter\n\
-         \x20   except:\n\
-         \x20       pass\n\
-         \x20   try:\n\
-         \x20       old_input = renpy.input\n\
-         \x20       def tpg_input(prompt, *args, **kwargs):\n\
-         \x20           return old_input(__(prompt), *args, **kwargs)\n\
-         \x20       renpy.input = tpg_input\n\
-         \x20   except:\n\
-         \x20       pass\n",
-        translation_folder
+        r#"init 999 python:
+    tbx_language_labels = dict([("{0}", "{1}")])
+    tbx_use_language_overlay = {2}
+
+    def tbx_language_name(language):
+        return tbx_language_labels.get(language, language.replace("_", " ").title())
+
+    try:
+        tbx_previous_say_filter = config.say_menu_text_filter
+        def tbx_translate_filter(txt):
+            if txt:
+                try:
+                    if tbx_previous_say_filter:
+                        txt = tbx_previous_say_filter(txt)
+                    return __(txt)
+                except:
+                    pass
+            return txt
+        config.say_menu_text_filter = tbx_translate_filter
+    except:
+        pass
+
+    try:
+        if not hasattr(renpy, "tbx_original_input"):
+            renpy.tbx_original_input = renpy.input
+        def tbx_input(prompt, *args, **kwargs):
+            return renpy.tbx_original_input(__(prompt), *args, **kwargs)
+        renpy.input = tbx_input
+    except:
+        pass
+
+    try:
+        if tbx_use_language_overlay and "tbx_language_access" not in config.overlay_screens:
+            config.overlay_screens.append("tbx_language_access")
+    except:
+        pass
+
+screen tbx_language_access():
+    zorder 9998
+
+    if main_menu or renpy.get_screen("preferences") or renpy.get_screen("options"):
+        textbutton _("Language") action Show("tbx_language_selector"):
+            xalign 0.98
+            yalign 0.02
+
+screen tbx_language_selector():
+    modal True
+    zorder 9999
+
+    add Solid("#00000099")
+
+    frame:
+        align (0.5, 0.5)
+        padding (30, 24)
+
+        vbox:
+            spacing 10
+            label _("Language")
+            textbutton _("Original") action [Language(None), Hide("tbx_language_selector")]
+
+            for tbx_lang in sorted(renpy.known_languages()):
+                textbutton tbx_language_name(tbx_lang) action [Language(tbx_lang), Hide("tbx_language_selector")]
+
+            textbutton _("Close") action Hide("tbx_language_selector")
+"#,
+        escaped_language_id,
+        language_label,
+        fallback_flag,
     );
     let _ = fs::write(boot_script, boot_content);
 
     // Cleanup temp
-    let _ = fs::remove_file(&injection_script);
-    let _ = fs::remove_file(game_dir.join("tpg_dumper.rpyc"));
+    let _ = fs::remove_file(game_dir.join("tbx_dumper.rpy"));
+    let _ = fs::remove_file(game_dir.join("tbx_dumper.rpyc"));
     let _ = fs::remove_dir_all(&temp_dir);
 
-    let _ = tx.send(UiMsg::Log("[Concluído] Tradução Ren'Py finalizada com sucesso!".into()));
+    if was_cancelled {
+        let _ = tx.send(UiMsg::Log("[Aviso] A tradução foi cancelada. Os arquivos traduzidos até o momento foram salvos.".to_string()));
+        let _ = tx.send(UiMsg::Cancelled);
+    } else {
+        let _ = tx.send(UiMsg::Log("[Concluído] Tradução Ren'Py finalizada com sucesso!".into()));
+        let _ = tx.send(UiMsg::Done("Tradução concluída.".to_string()));
+    }
     Ok(())
 }
 
 pub fn spawn_renpy_hidden(executable: &str) -> std::io::Result<std::process::Child> {
-    use std::process::Stdio;
-    crate::paths::hidden_command(executable)
-        .env("RENPY_DISABLE_SOUND", "1")
-        .env("RENPY_SKIP_SPLASHSCREEN", "1")
-        .env("RENPY_RENDERER", "sw")
-        .env("SDL_VIDEODRIVER", "dummy")
-        .env("SDL_AUDIODRIVER", "dummy")
-        .stdout(Stdio::null()).stderr(Stdio::null())
-        .spawn()
-}
-
-fn normalize_dump_text(text: &str) -> String {
-    text.replace("\\n", "\n")
-        .replace("\r", "")
-        .replace("\\r", "")
-        .trim()
-        .to_string()
-}
-
-fn filter_reason(text: &str) -> Option<&'static str> {
-    let s = text.trim();
-    if s.is_empty() { return Some("vazio"); }
-    if s.len() < 2 { return Some("curto"); }
-    if s.len() > 1000 { return Some("longo"); }
-    if !s.chars().any(|c| c.is_alphabetic()) { return Some("sem_letra"); }
-
-    let lower = s.to_lowercase();
-    if lower.starts_with("http://") || lower.starts_with("https://") { return Some("url"); }
-    if lower.ends_with(".png") || lower.ends_with(".jpg") || lower.ends_with(".ogg") { return Some("arquivo"); }
-
-    let letters = s.chars().filter(|c| c.is_alphabetic()).count();
-    let len = s.len().max(1);
-    if letters * 100 / len < 20 { return Some("poucas_letras"); }
-
-    None
-}
-
-pub fn protect_renpy_tags(text: &str) -> String {
-    // Protect both {...} tags and [...] variables (such as [plural], [mc_nombre], [her], etc.)
-    let re = Regex::new(r"(\{[^{}\r\n]{1,120}\}|\[[^\[\]\r\n]{1,80}\])").unwrap();
-    let mut idx = 0usize;
-    re.replace_all(text, |_: &regex::Captures| {
-        let marker = format!("_TBXVAR{}_", idx);
-        idx += 1;
-        marker
-    }).to_string()
-}
-
-pub fn restore_renpy_tags(translated: &str, original: &str) -> String {
-    let re = Regex::new(r"(\{[^{}\r\n]{1,120}\}|\[[^\[\]\r\n]{1,80}\])").unwrap();
-    let tags: Vec<String> = re.find_iter(original).map(|m| m.as_str().to_string()).collect();
-    let mut result = translated.to_string();
-
-    for (i, tag) in tags.iter().enumerate() {
-        // Tolerant regex matching _TBXVAR0_, _ TBXVAR0 _, _TBXVAR 0_, TBXVAR0, etc.
-        let pattern = format!(r"(?:_+|\b)\s*TBX(?:VAR|TAG)\s*{}\s*(?:_+|\b)", i);
-        if let Ok(marker_re) = Regex::new(&pattern) {
-            result = marker_re.replace_all(&result, tag.as_str()).to_string();
-        }
-
-        // Backward compatibility for numeric 777000777 pattern
-        let old_pattern = format!(r"7\s*7\s*7[\s.,]*{}\s*7\s*7\s*7", format!("{:03}", i).chars().map(|c| c.to_string()).collect::<Vec<_>>().join(r"[\s.,]*"));
-        if let Ok(old_re) = Regex::new(&old_pattern) {
-            result = old_re.replace_all(&result, tag.as_str()).to_string();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(metadata) = std::fs::metadata(executable) {
+            let mut perms = metadata.permissions();
+            if perms.mode() & 0o111 == 0 {
+                perms.set_mode(perms.mode() | 0o111);
+                let _ = std::fs::set_permissions(executable, perms);
+            }
         }
     }
 
-    result
+    use std::process::Stdio;
+    let exe_path = Path::new(executable);
+    let log_path = exe_path.parent().unwrap_or(exe_path).join("tbx_renpy.log");
+
+    let stdout = std::fs::File::create(&log_path).ok().map_or(Stdio::null(), |f| Stdio::from(f));
+    let stderr = std::fs::File::create(&log_path).ok().map_or(Stdio::null(), |f| Stdio::from(f));
+
+    crate::paths::hidden_command(executable)
+        .env("RENPY_DISABLE_SOUND", "1")
+        .env("RENPY_SKIP_SPLASHSCREEN", "1")
+        .stdout(stdout).stderr(stderr)
+        .spawn()
 }
+
 
 fn escape_renpy(text: &str) -> String {
     text.replace('\\', r"\\")
@@ -338,33 +630,61 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_protect_and_restore_renpy_interpolations() {
-        let original = "No one said anything. All your [plural] looked at you at the same time.";
-        let protected = protect_renpy_tags(original);
-        assert_eq!(protected, "No one said anything. All your _TBXVAR0_ looked at you at the same time.");
+    fn test_only_visible_renpy_segments_are_prepared() {
+        let re = Regex::new(RENPY_CONTROL_PATTERN).unwrap();
+        let mut visible = Vec::new();
+        let parts = split_renpy_text("{sc=4}What is wrong, [c_name]?{/sc}", &re, &mut visible);
+        assert_eq!(visible, vec!["What is wrong, ", "?"]);
 
-        // Simulate translation preserving placeholder
-        let simulated_trans = "Ninguém disse nada. Todas as suas _TBXVAR0_ olharam para você ao mesmo tempo.";
-        let restored = restore_renpy_tags(simulated_trans, original);
-        assert_eq!(restored, "Ninguém disse nada. Todas as suas [plural] olharam para você ao mesmo tempo.");
+        let translated = vec!["O que há de errado, ".to_string(), "?".to_string()];
+        assert_eq!(
+            rebuild_renpy_text(&parts, &translated),
+            "{sc=4}O que há de errado, [c_name]?{/sc}"
+        );
     }
 
     #[test]
-    fn test_protect_and_restore_multiple_tags_and_vars() {
-        let original = "Olá [mc_nombre], você tem {b}[count]{/b} mensagens de {color=#ff0000}[sender]{/color}!";
-        let protected = protect_renpy_tags(original);
-        assert_eq!(protected, "Olá _TBXVAR0_, você tem _TBXVAR1__TBXVAR2__TBXVAR3_ mensagens de _TBXVAR4__TBXVAR5__TBXVAR6_!");
-
-        let simulated_trans = "Hello _TBXVAR0_, you have _TBXVAR1__TBXVAR2__TBXVAR3_ messages from _TBXVAR4__TBXVAR5__TBXVAR6_!";
-        let restored = restore_renpy_tags(simulated_trans, original);
-        assert_eq!(restored, "Hello [mc_nombre], you have {b}[count]{/b} messages from {color=#ff0000}[sender]{/color}!");
+    fn test_format_expression_is_not_sent_for_translation() {
+        let re = Regex::new(RENPY_CONTROL_PATTERN).unwrap();
+        let mut visible = Vec::new();
+        let parts = split_renpy_text("time: [_viewers.moved_time:>.2f] s", &re, &mut visible);
+        assert_eq!(visible, vec!["time: ", " s"]);
+        let translated = vec!["tempo: ".to_string(), " s".to_string()];
+        assert_eq!(
+            rebuild_renpy_text(&parts, &translated),
+            "tempo: [_viewers.moved_time:>.2f] s"
+        );
     }
 
     #[test]
-    fn test_restore_tolerant_spacing() {
-        let original = "Hello [plural] and [mc_nombre]!";
-        let simulated_with_spaces = "Olá _ TBXVAR0 _ e _TBXVAR 1_!";
-        let restored = restore_renpy_tags(simulated_with_spaces, original);
-        assert_eq!(restored, "Olá [plural] e [mc_nombre]!");
+    fn test_language_identifier_is_valid_for_renpy() {
+        assert_eq!(language_identifier("Portuguese BR"), "portuguese_br");
+        assert_eq!(language_identifier("  123 PT-BR  "), "lang_123_pt_br");
+        assert_eq!(language_identifier(""), "portuguese");
+    }
+
+    #[test]
+    fn test_static_language_menu_is_extended_once() {
+        let directory = std::env::temp_dir().join(format!(
+            "tbx-renpy-menu-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let screen = directory.join("screens.rpy");
+        fs::write(
+            &screen,
+            "screen preferences():\n    vbox:\n        textbutton \"English\":\n            action Language(None)\n        textbutton \"Español\":\n            action Language(\"spanish\")\n",
+        )
+        .unwrap();
+
+        let first = integrate_language_menu(&directory, "portuguese", "Portuguese").unwrap();
+        let second = integrate_language_menu(&directory, "portuguese", "Portuguese").unwrap();
+        let content = fs::read_to_string(&screen).unwrap();
+        assert_eq!(first, (1, false));
+        assert_eq!(second, (1, false));
+        assert_eq!(content.matches("TBX_LANGUAGE_OPTION:portuguese").count(), 1);
+        assert!(screen.with_file_name("screens.rpy.tbx_backup").exists());
+        let _ = fs::remove_dir_all(directory);
     }
 }

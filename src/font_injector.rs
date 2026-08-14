@@ -16,6 +16,7 @@ pub struct FontInjectorState {
     pub is_scanning: bool,
     pub renpy_fonts: Vec<String>,
     pub unity_fonts: Vec<String>,
+    pub godot_fonts: Vec<String>,
     pub test_texts: HashMap<String, String>,
     pub textures: HashMap<String, (String, TextureHandle)>,
     pub unity_atlas_textures: HashMap<String, TextureHandle>,
@@ -26,6 +27,7 @@ pub struct FontInjectorState {
 enum ScanResult {
     Renpy(Result<Vec<String>, String>),
     Unity(Result<Vec<String>, String>),
+    Godot(Result<Vec<String>, String>),
 }
 
 impl Default for FontInjectorState {
@@ -35,6 +37,7 @@ impl Default for FontInjectorState {
             is_scanning: false,
             renpy_fonts: Vec::new(),
             unity_fonts: Vec::new(),
+            godot_fonts: Vec::new(),
             test_texts: HashMap::new(),
             textures: HashMap::new(),
             unity_atlas_textures: HashMap::new(),
@@ -72,6 +75,13 @@ impl FontInjectorState {
                     ScanResult::Unity(Err(err)) => {
                         self.status_message = Some((true, format!("Erro ao escanear fontes Unity: {}", err)));
                     }
+                    ScanResult::Godot(Ok(fonts)) => {
+                        self.godot_fonts = fonts;
+                        self.status_message = None;
+                    }
+                    ScanResult::Godot(Err(err)) => {
+                        self.status_message = Some((true, format!("Erro ao escanear fontes Godot: {}", err)));
+                    }
                 }
                 ctx.request_repaint();
             }
@@ -87,6 +97,17 @@ impl FontInjectorState {
         thread::spawn(move || {
             let res = scan_renpy_fonts(&game_path);
             let _ = tx.send(ScanResult::Renpy(res));
+        });
+    }
+
+    pub fn start_scan_godot(&mut self, game_path: String) {
+        self.is_scanning = true;
+        self.status_message = None;
+        let (tx, rx) = channel();
+        self.rx = Some(rx);
+        thread::spawn(move || {
+            let res = scan_godot_fonts(&game_path);
+            let _ = tx.send(ScanResult::Godot(res));
         });
     }
 
@@ -117,6 +138,7 @@ impl FontInjectorState {
         ui.horizontal(|ui| {
             let renpy_active = self.engine_tab == 0;
             let unity_active = self.engine_tab == 1;
+            let godot_active = self.engine_tab == 2;
 
             let renpy_btn = egui::Button::new(
                 egui::RichText::new("Ren'Py")
@@ -139,6 +161,17 @@ impl FontInjectorState {
                 self.engine_tab = 1;
                 self.status_message = None;
             }
+
+            let godot_btn = egui::Button::new(
+                egui::RichText::new("Godot")
+                    .color(if godot_active { Color32::from_rgb(166, 227, 161) } else { Color32::from_rgb(166, 173, 200) })
+                    .strong()
+            ).fill(if godot_active { Color32::from_rgb(49, 50, 68) } else { Color32::from_rgb(17, 17, 27) });
+
+            if ui.add(godot_btn).clicked() {
+                self.engine_tab = 2;
+                self.status_message = None;
+            }
         });
 
         ui.add_space(8.0);
@@ -153,8 +186,10 @@ impl FontInjectorState {
 
         if self.engine_tab == 0 {
             self.render_renpy_tab(ui, ctx, game_path);
-        } else {
+        } else if self.engine_tab == 1 {
             self.render_unity_tab(ui, ctx, game_path);
+        } else if self.engine_tab == 2 {
+            self.render_godot_tab(ui, ctx, game_path);
         }
     }
 
@@ -203,7 +238,7 @@ impl FontInjectorState {
                                         action_to_perform = Some((font_path.clone(), file));
                                     }
                                 }
-                                
+
                                 let btn_ext = egui::Button::new(egui::RichText::new("Extrair original").color(Color32::from_rgb(17, 17, 27)).strong())
                                     .fill(Color32::from_rgb(203, 166, 247));
                                 if ui.add(btn_ext).clicked() {
@@ -227,7 +262,7 @@ impl FontInjectorState {
                                 base_dir = p.to_path_buf();
                             }
                         }
-                        let dumped_font_path = base_dir.join("game").join("tpg_temp_fonts").join(font_file_name);
+                        let dumped_font_path = base_dir.join("game").join("tbx_temp_fonts").join(font_file_name);
 
                         if dumped_font_path.exists() {
                             let text_val = current_text.clone();
@@ -260,8 +295,8 @@ impl FontInjectorState {
                                 base_dir = p.to_path_buf();
                             }
                         }
-                        let dumped_font_path = base_dir.join("game").join("tpg_temp_fonts").join(font_file_name);
-                        
+                        let dumped_font_path = base_dir.join("game").join("tbx_temp_fonts").join(font_file_name);
+
                         if dumped_font_path.exists() {
                             let dest = folder.join(font_file_name);
                             match fs::copy(&dumped_font_path, &dest) {
@@ -270,6 +305,70 @@ impl FontInjectorState {
                             }
                         } else {
                             self.status_message = Some((true, "❌ A fonte temporária não foi encontrada.".to_string()));
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    fn render_godot_tab(&mut self, ui: &mut Ui, ctx: &Context, game_path: &str) {
+        ui.horizontal(|ui| {
+            let scan_label = if self.is_scanning {
+                "⏳ Escaneando fontes (aguarde)..."
+            } else if self.godot_fonts.is_empty() {
+                "🔍 Escanear Fontes do PCK (Godot)"
+            } else {
+                "🔄 Escanear Novamente"
+            };
+
+            let btn = egui::Button::new(egui::RichText::new(scan_label).color(Color32::from_rgb(17, 17, 27)).strong())
+                .fill(Color32::from_rgb(166, 227, 161));
+
+            if ui.add_enabled(!self.is_scanning, btn).clicked() {
+                self.start_scan_godot(game_path.to_string());
+            }
+        });
+
+        ui.add_space(8.0);
+
+        let fonts = self.godot_fonts.clone();
+
+        egui::ScrollArea::vertical().id_salt("godot_fonts_scroll").show(ui, |ui| {
+            if fonts.is_empty() && !self.is_scanning {
+                ui.label(egui::RichText::new("Nenhuma fonte Godot encontrada. Selecione o executável/PCK e escaneie.").color(Color32::from_rgb(166, 173, 200)));
+            } else {
+                let mut action_to_perform: Option<(String, PathBuf)> = None;
+
+                for font_path in &fonts {
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(font_path).color(Color32::WHITE).strong());
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                let btn = egui::Button::new(egui::RichText::new("Substituir").color(Color32::from_rgb(17, 17, 27)).strong())
+                                    .fill(Color32::from_rgb(137, 180, 250));
+                                if ui.add(btn).clicked() {
+                                    if let Some(file) = rfd::FileDialog::new()
+                                        .set_title("Selecione a Nova Fonte")
+                                        .add_filter("Fontes (*.ttf, *.otf)", &["ttf", "otf"])
+                                        .pick_file()
+                                    {
+                                        action_to_perform = Some((font_path.clone(), file));
+                                    }
+                                }
+                            });
+                        });
+                    });
+                    ui.add_space(6.0);
+                }
+
+                if let Some((target_font, new_font_file)) = action_to_perform {
+                    match inject_godot_individual(game_path, &new_font_file, &target_font) {
+                        Ok(_) => {
+                            self.status_message = Some((false, format!("✅ Fonte '{}' substituída com sucesso via patch!", target_font)));
+                        }
+                        Err(e) => {
+                            self.status_message = Some((true, format!("❌ Erro ao substituir fonte: {}", e)));
                         }
                     }
                 }
@@ -533,17 +632,32 @@ pub fn scan_renpy_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
     if !game_dir.exists() {
         return Err("Pasta 'game' não encontrada.".to_string());
     }
+    // Remove only temporary artifacts left by versions that still used the
+    // old TPG prefix. Backups are intentionally preserved.
+    let _ = fs::remove_dir_all(game_dir.join("tpg_temp_fonts"));
+    for legacy_name in &[
+        "tpg_fonts.json",
+        "tpg_fonts.json.done",
+        "tpg_font_dumper.rpy",
+        "tpg_font_dumper.rpyc",
+    ] {
+        let _ = fs::remove_file(game_dir.join(legacy_name));
+    }
 
     let dumper_script = r#"
 init 999 python:
     import json
     import os
     import sys
+    import io
     fonts = []
-    
-    font_dir = os.path.join(renpy.config.basedir, "game", "tpg_temp_fonts")
-    os.makedirs(font_dir, exist_ok=True)
-    
+
+    font_dir = os.path.join(renpy.config.basedir, "game", "tbx_temp_fonts")
+    try:
+        os.makedirs(font_dir)
+    except Exception:
+        pass
+
     for f in renpy.list_files():
         fl = f.lower()
         if fl.endswith((".ttf", ".otf", ".woff", ".woff2")):
@@ -556,26 +670,44 @@ init 999 python:
             except:
                 pass
     try:
-        with open(renpy.config.basedir + "/game/tpg_fonts.json", "w", encoding="utf-8") as out:
+        with io.open(renpy.config.basedir + "/game/tbx_fonts.json", "w", encoding="utf-8") as out:
             json.dump(fonts, out, ensure_ascii=False, indent=4)
-    except:
-        pass
+        with open(renpy.config.basedir + "/game/tbx_fonts.json.done", "w") as f:
+            f.write("1")
+    except Exception as e:      pass
     renpy.quit()
 "#;
 
-    let dumper_path = game_dir.join("tpg_font_dumper.rpy");
+    let dumper_path = game_dir.join("tbx_font_dumper.rpy");
     fs::write(&dumper_path, dumper_script).map_err(|e| format!("Falha ao escrever dumper: {}", e))?;
 
-    let json_path = game_dir.join("tpg_fonts.json");
+    let json_path = game_dir.join("tbx_fonts.json");
     let _ = fs::remove_file(&json_path);
 
     let mut proc = crate::renpy_extractor::spawn_renpy_hidden(&executable.to_string_lossy())
         .map_err(|e| format!("Falha ao iniciar Ren'Py: {}", e))?;
 
-    let _ = proc.wait();
+    let mut wait_count = 0;
+    while !game_dir.join("tbx_fonts.json.done").exists() {
+        if wait_count > 30 { // 15 seconds
+            let _ = proc.kill();
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        wait_count += 1;
+    }
+
+    let done_exists = game_dir.join("tbx_fonts.json.done").exists();
+
+    let _ = proc.kill(); // Ensure it closes
 
     let _ = fs::remove_file(&dumper_path);
-    let _ = fs::remove_file(game_dir.join("tpg_font_dumper.rpyc"));
+    let _ = fs::remove_file(game_dir.join("tbx_font_dumper.rpyc"));
+    if done_exists {
+        let _ = fs::remove_file(game_dir.join("tbx_fonts.json.done"));
+    } else {
+        return Err("O motor do jogo travou ou demorou demais para responder (timeout). Tente novamente.".to_string());
+    }
 
     if !json_path.exists() {
         return Err("Arquivo JSON não gerado pelo motor.".to_string());
@@ -606,7 +738,7 @@ pub fn inject_renpy_individual(game_path_str: &str, user_font_path: &Path, targe
     }
 
     if target_full_path.exists() {
-        let backup_path = game_dir.join(format!("{}.tpg_backup", target_internal_path));
+        let backup_path = game_dir.join(format!("{}.tbx_backup", target_internal_path));
         if !backup_path.exists() {
             let _ = fs::copy(&target_full_path, &backup_path);
         }
@@ -710,7 +842,7 @@ pub fn export_unity_original_font(game_path_str: &str, target_internal_path: &st
     if base_dir.is_file() {
         base_dir = base_dir.parent().ok_or("Pasta do jogo inválida.")?.to_path_buf();
     }
-    let output_dir = base_dir.join("tpg_temp_fonts");
+    let output_dir = base_dir.join("tbx_temp_fonts");
     let locator = format!("{}|{}", parts[0], parts[2]);
     let script_path = crate::paths::app_root().join("unity_static_extractor");
     let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
@@ -744,7 +876,7 @@ pub fn export_tmp_atlas_preview(game_path_str: &str, asset_path: &str, path_id: 
     if base_dir.is_file() {
         base_dir = base_dir.parent().ok_or("Pasta do jogo inválida.")?.to_path_buf();
     }
-    let output_dir = base_dir.join("tpg_temp_fonts");
+    let output_dir = base_dir.join("tbx_temp_fonts");
     let script_path = crate::paths::app_root().join("unity_static_extractor");
     let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
     let mut command = if packaged.is_file() {
@@ -780,4 +912,35 @@ pub fn export_tmp_atlas_preview(game_path_str: &str, asset_path: &str, path_id: 
             let _ = fs::remove_file(ppm_path);
             Ok(png_path)
         })
+}
+
+
+pub fn scan_godot_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
+    let file = fs::File::open(game_path_str).map_err(|e| format!("Erro ao abrir arquivo: {}", e))?;
+    let archive = crate::godot_pck::read_pck_header(file).map_err(|e| format!("Erro no PCK: {}", e))?;
+
+    let mut fonts = Vec::new();
+    for entry in archive.files {
+        let path = entry.path.to_lowercase();
+        if path.ends_with(".ttf") || path.ends_with(".otf") {
+            fonts.push(entry.path.clone());
+        }
+    }
+
+    Ok(fonts)
+}
+
+pub fn inject_godot_individual(game_path_str: &str, user_font_path: &Path, target_internal_path: &str) -> Result<(), String> {
+    let target_pck = PathBuf::from(game_path_str);
+    let pck_name = target_pck.file_stem().unwrap().to_str().unwrap();
+    let patch_pck = target_pck.with_file_name(format!("{}_TBX_Font_Patch.pck", pck_name));
+
+    let font_data = fs::read(user_font_path).map_err(|e| format!("Falha ao ler nova fonte: {}", e))?;
+
+    let mut files_to_add = HashMap::new();
+    files_to_add.insert(target_internal_path.to_string(), font_data);
+
+    crate::godot_pck::create_patch_pck(&patch_pck, &files_to_add).map_err(|e| format!("Falha ao gerar PCK patch de fonte: {}", e))?;
+
+    Ok(())
 }

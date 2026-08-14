@@ -31,6 +31,8 @@ jobs:
   linux:
     name: Build Linux x64
     runs-on: ubuntu-22.04
+    env:
+      TBX_BUILD_NUMBER: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,6 +53,8 @@ jobs:
   windows:
     name: Build Windows x64
     runs-on: windows-latest
+    env:
+      TBX_BUILD_NUMBER: ${{ github.run_number }}
     defaults:
       run:
         shell: msys2 {0}
