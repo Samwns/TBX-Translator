@@ -233,5 +233,178 @@ impl TbxApp {
                     });
                 });
         }
+
+        // 5. Themes Selector Modal
+        self.render_themes_modal(ctx);
+    }
+}
+
+impl TbxApp {
+    pub fn render_themes_modal(&mut self, ctx: &egui::Context) {
+        if !self.show_themes_modal {
+            return;
+        }
+
+        let themes = crate::themes::AppTheme::all();
+        let current_id = self.config.theme_id.clone();
+
+        let mut close = false;
+        let mut apply_id: Option<String> = None;
+
+        egui::Window::new("Temas de Cores")
+            .id(egui::Id::new("themes_modal"))
+            .collapsible(false)
+            .resizable(false)
+            .pivot(egui::Align2::CENTER_CENTER)
+            .default_pos(ctx.screen_rect().center())
+            .default_width(620.0)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::Image::new(egui::include_image!("../../assets/brush_icon.svg"))
+                            .max_size(egui::vec2(22.0, 22.0)),
+                    );
+                    ui.label(egui::RichText::new("Escolha um tema visual").strong().size(15.0));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button("Fechar").clicked() {
+                            close = true;
+                        }
+                    });
+                });
+                ui.separator();
+                ui.add_space(6.0);
+
+                egui::ScrollArea::vertical()
+                    .max_height(420.0)
+                    .id_salt("themes_scroll")
+                    .show(ui, |ui| {
+                        egui::Grid::new("themes_grid")
+                            .num_columns(4)
+                            .spacing([8.0, 8.0])
+                            .show(ui, |ui| {
+                                for (i, theme) in themes.iter().enumerate() {
+                                    let is_active = theme.id == current_id;
+
+                                    let card_fill = if is_active {
+                                        egui::Color32::from_rgb(49, 74, 63)
+                                    } else {
+                                        theme.mantle
+                                    };
+                                    let card_stroke = if is_active {
+                                        egui::Stroke::new(2.0, theme.accent)
+                                    } else {
+                                        egui::Stroke::new(1.0, theme.border)
+                                    };
+
+                                    let (card_rect, card_resp) = ui.allocate_exact_size(
+                                        egui::vec2(136.0, 110.0),
+                                        egui::Sense::click(),
+                                    );
+
+                                    if card_resp.clicked() {
+                                        apply_id = Some(theme.id.to_string());
+                                    }
+
+                                    let painter = ui.painter();
+
+                                    // Card background
+                                    painter.rect_filled(card_rect, egui::Rounding::same(8.0), card_fill);
+                                    painter.rect_stroke(card_rect, egui::Rounding::same(8.0), card_stroke);
+
+                                    // Mini window preview
+                                    let preview_rect = egui::Rect::from_min_size(
+                                        card_rect.min + egui::vec2(8.0, 8.0),
+                                        egui::vec2(120.0, 44.0),
+                                    );
+                                    painter.rect_filled(preview_rect, egui::Rounding::same(5.0), theme.base);
+
+                                    // Title bar
+                                    let title_rect = egui::Rect::from_min_size(
+                                        preview_rect.min,
+                                        egui::vec2(120.0, 12.0),
+                                    );
+                                    painter.rect_filled(title_rect, egui::Rounding { nw: 5.0, ne: 5.0, sw: 0.0, se: 0.0 }, theme.crust);
+
+                                    // Traffic light dots
+                                    let dot_colors = [
+                                        egui::Color32::from_rgb(243, 139, 168),
+                                        egui::Color32::from_rgb(249, 226, 175),
+                                        egui::Color32::from_rgb(166, 227, 161),
+                                    ];
+                                    for (d, &dot_color) in dot_colors.iter().enumerate() {
+                                        painter.circle_filled(
+                                            egui::pos2(title_rect.min.x + 6.0 + d as f32 * 9.0, title_rect.center().y),
+                                            3.0,
+                                            dot_color,
+                                        );
+                                    }
+
+                                    // Color swatches
+                                    let swatch_y = title_rect.max.y + 6.0;
+                                    let swatch_colors = [theme.surface0, theme.surface1, theme.accent, theme.accent2, theme.text];
+                                    for (s, &col) in swatch_colors.iter().enumerate() {
+                                        painter.rect_filled(
+                                            egui::Rect::from_min_size(
+                                                egui::pos2(preview_rect.min.x + 6.0 + s as f32 * 22.0, swatch_y),
+                                                egui::vec2(18.0, 18.0),
+                                            ),
+                                            egui::Rounding::same(4.0),
+                                            col,
+                                        );
+                                    }
+
+                                    // Accent color indicator dot + name
+                                    painter.circle_filled(
+                                        card_rect.min + egui::vec2(14.0, 65.0),
+                                        4.0,
+                                        theme.accent,
+                                    );
+                                    painter.text(
+                                        card_rect.min + egui::vec2(24.0, 58.0),
+                                        egui::Align2::LEFT_TOP,
+                                        theme.name,
+                                        egui::FontId::proportional(11.0),
+                                        theme.text,
+                                    );
+
+                                    // Badge
+                                    let badge_rect = egui::Rect::from_min_size(
+                                        card_rect.min + egui::vec2(8.0, 80.0),
+                                        egui::vec2(120.0, 22.0),
+                                    );
+                                    if is_active {
+                                        painter.rect_filled(badge_rect, egui::Rounding::same(4.0), theme.accent);
+                                        painter.text(badge_rect.center(), egui::Align2::CENTER_CENTER,
+                                            "Ativo", egui::FontId::proportional(11.0), egui::Color32::from_rgb(17, 17, 27));
+                                    } else {
+                                        let hover_col = if card_resp.hovered() { theme.surface1 } else { theme.surface0 };
+                                        painter.rect_filled(badge_rect, egui::Rounding::same(4.0), hover_col);
+                                        painter.text(badge_rect.center(), egui::Align2::CENTER_CENTER,
+                                            "Aplicar", egui::FontId::proportional(11.0), theme.text);
+                                    }
+
+                                    if (i + 1) % 4 == 0 {
+                                        ui.end_row();
+                                    }
+                                }
+                            });
+                    });
+            });
+
+        if let Some(id) = apply_id {
+            let all = crate::themes::AppTheme::all();
+            if let Some(theme) = all.iter().find(|t| t.id == id) {
+                self.apply_theme(theme, ctx);
+            }
+        }
+        if close {
+            self.show_themes_modal = false;
+        }
+    }
+
+    fn apply_theme(&mut self, theme: &crate::themes::AppTheme, ctx: &egui::Context) {
+        self.config.theme_id = theme.id.to_string();
+        self.config.salvar();
+        crate::ui::setup_theme_visuals(ctx, theme);
     }
 }

@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::thread;
 
 use egui::{
-    Color32, Context, Frame, Margin, Rounding, Stroke, Visuals,
+    Button, Color32, Context, Frame, Margin, Rounding, Stroke, Visuals, vec2,
 };
 
 use crate::app_config::AppConfig;
@@ -132,7 +132,7 @@ pub struct TbxApp {
     pub show_alert_modal: Option<(bool, String, String)>, // (is_error, title, message)
     pub show_post_update_changelog: bool,
     pub post_update_changelog: String,
-
+    pub show_themes_modal: bool,
     // Cached languages
     pub source_languages: Vec<&'static str>,
     pub target_languages: Vec<&'static str>,
@@ -159,6 +159,12 @@ impl TbxApp {
         let config = AppConfig::carregar();
         let show_post_update_changelog =
             config.ultima_versao_exibida != crate::updater::current_version();
+
+        // Apply saved theme visuals
+        if let Some(theme) = crate::themes::AppTheme::all().iter().find(|t| t.id == config.theme_id) {
+            setup_theme_visuals(&cc.egui_ctx, theme);
+        }
+
         let (tx, rx) = channel();
 
         let initial_engine = if config.modo_jogo == "unity" {
@@ -221,6 +227,7 @@ impl TbxApp {
             update_downloading: false,
             update_status: String::new(),
             update_progress: (0, 0),
+            show_themes_modal: false,
         };
 
         app.detect_game_type();
@@ -815,6 +822,7 @@ impl eframe::App for TbxApp {
 
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         self.check_incoming_messages(ctx);
+        let theme = crate::themes::AppTheme::get(&self.config.theme_id);
 
         // Custom frameless window root container
         egui::CentralPanel::default()
@@ -826,9 +834,9 @@ impl eframe::App for TbxApp {
             .show(ctx, |ui| {
                 // Wrapper frame for the actual app content
                 Frame::none()
-                    .fill(Color32::from_rgb(30, 30, 46)) // #1e1e2e
+                    .fill(theme.base)
                     .rounding(Rounding::same(12.0))
-                    .stroke(Stroke::new(1.0, Color32::from_rgb(69, 71, 90)))
+                    .stroke(Stroke::new(1.0, theme.border))
                     .shadow(egui::epaint::Shadow {
                         offset: egui::vec2(0.0, 4.0),
                         blur: 18.0,
@@ -842,7 +850,7 @@ impl eframe::App for TbxApp {
 
                         // Main body area
                         Frame::none()
-                            .fill(Color32::from_rgb(30, 30, 46))
+                            .fill(theme.base)
                             .inner_margin(Margin::same(16.0))
                             .rounding(Rounding {
                                 nw: 0.0,
@@ -851,30 +859,70 @@ impl eframe::App for TbxApp {
                                 se: 12.0,
                             })
                             .show(ui, |ui| {
-                                ui.set_min_size(ui.available_size());
+                                // Tab content (top-down, normal layout)
+                                let body_rect = ui.available_rect_before_wrap();
+                                ui.set_min_size(body_rect.size());
+
                                 match self.current_tab {
-                        AppTab::Translate => self.render_translate_tab(ui, ctx),
-                        AppTab::Logs => self.render_logs_tab(ui),
-                        AppTab::Tools => self.render_tools_tab(ui, ctx),
-                        AppTab::Settings => self.render_settings_tab(ui),
-                        AppTab::Updates => self.render_updates_tab(ui),
-                        AppTab::Editor => self.render_editor_view(ui, ctx),
-                        AppTab::FontInjector => self.render_font_injector_view(ui, ctx),
-                    }
-                    });
+                                    AppTab::Translate => self.render_translate_tab(ui, ctx),
+                                    AppTab::Logs => self.render_logs_tab(ui),
+                                    AppTab::Tools => self.render_tools_tab(ui, ctx),
+                                    AppTab::Settings => self.render_settings_tab(ui),
+                                    AppTab::Updates => self.render_updates_tab(ui),
+                                    AppTab::Editor => self.render_editor_view(ui, ctx),
+                                    AppTab::FontInjector => self.render_font_injector_view(ui, ctx),
+                                }
+                            });
+
+                        // Social shortcuts pinned near the bottom-right corner, almost touching the border
+                        let btn_w = 26.0_f32;
+                        let btn_h = 26.0_f32;
+                        let gap = 5.0_f32;
+                        let pad_x = 6.0_f32;
+                        let pad_y = 2.0_f32; // Lowered further down as requested
+                        let total_w = btn_w * 2.0 + gap;
+                        let br = ui.max_rect().right_bottom();
+
+                        let discord_rect = egui::Rect::from_min_size(
+                            egui::pos2(br.x - total_w - pad_x, br.y - btn_h - pad_y),
+                            vec2(btn_w, btn_h),
+                        );
+                        let kofi_rect = egui::Rect::from_min_size(
+                            egui::pos2(br.x - btn_w - pad_x, br.y - btn_h - pad_y),
+                            vec2(btn_w, btn_h),
+                        );
+
+                        let discord_resp = ui.put(
+                            discord_rect,
+                            Button::image(
+                                egui::Image::new(egui::include_image!("../../assets/discord_icon.svg"))
+                                    .max_size(vec2(14.0, 14.0)),
+                            )
+                            .fill(theme.surface0)
+                            .rounding(Rounding::same(6.0)),
+                        ).on_hover_text("Entrar no Discord");
+                        if discord_resp.clicked() {
+                            ctx.open_url(egui::OpenUrl::new_tab("https://discord.gg/xsxhvWgWBz"));
+                        }
+
+                        let kofi_resp = ui.put(
+                            kofi_rect,
+                            Button::image(
+                                egui::Image::new(egui::include_image!("../../assets/kofi_icon.svg"))
+                                    .max_size(vec2(14.0, 14.0)),
+                            )
+                            .fill(theme.surface0)
+                            .rounding(Rounding::same(6.0)),
+                        ).on_hover_text("Apoiar no Ko-fi");
+                        if kofi_resp.clicked() {
+                            ctx.open_url(egui::OpenUrl::new_tab("https://ko-fi.com/samwns"));
+                        }
 
                         self.render_modals(ctx);
                     });
             });
 
-        if !self.show_post_update_changelog
-            && !self.show_overwrite_modal
-            && !self.show_engine_modal
-            && !self.show_cancel_modal
-            && self.show_alert_modal.is_none()
-        {
-            self.render_social_shortcuts(ctx);
-        }
+        // Social shortcuts are now rendered inline in the main body frame above
 
         let interactive_click = ctx.output(|output| {
             output.events.iter().any(|event| {
@@ -916,34 +964,38 @@ fn setup_custom_styles(ctx: &Context) {
     }
     ctx.set_fonts(fonts);
 
+    let mocha = crate::themes::AppTheme::all().remove(0);
+    setup_theme_visuals(ctx, &mocha);
+}
+
+pub fn setup_theme_visuals(ctx: &Context, theme: &crate::themes::AppTheme) {
     let mut visuals = Visuals::dark();
 
-    // Catppuccin Mocha Palette
-    visuals.override_text_color = Some(Color32::from_rgb(205, 214, 244)); // #cdd6f4
-    visuals.panel_fill = Color32::from_rgb(30, 30, 46); // #1e1e2e
-    visuals.window_fill = Color32::from_rgb(24, 24, 37); // #181825
-    visuals.window_stroke = Stroke::new(1.0, Color32::from_rgb(69, 71, 90)); // #45475a
+    visuals.override_text_color = Some(theme.text);
+    visuals.panel_fill = theme.base;
+    visuals.window_fill = theme.mantle;
+    visuals.window_stroke = Stroke::new(1.0, theme.border);
     visuals.window_rounding = Rounding::same(8.0);
 
     // Widget styling
-    visuals.widgets.noninteractive.bg_fill = Color32::from_rgb(24, 24, 37);
-    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(49, 50, 68));
+    visuals.widgets.noninteractive.bg_fill = theme.mantle;
+    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, theme.surface0);
     visuals.widgets.noninteractive.rounding = Rounding::same(6.0);
 
-    visuals.widgets.inactive.bg_fill = Color32::from_rgb(49, 50, 68);
-    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(69, 71, 90));
+    visuals.widgets.inactive.bg_fill = theme.surface0;
+    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, theme.surface1);
     visuals.widgets.inactive.rounding = Rounding::same(6.0);
 
-    visuals.widgets.hovered.bg_fill = Color32::from_rgb(69, 71, 90);
-    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, Color32::from_rgb(137, 180, 250));
+    visuals.widgets.hovered.bg_fill = theme.surface1;
+    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, theme.accent);
     visuals.widgets.hovered.rounding = Rounding::same(6.0);
 
-    visuals.widgets.active.bg_fill = Color32::from_rgb(88, 91, 112);
-    visuals.widgets.active.bg_stroke = Stroke::new(1.0, Color32::from_rgb(203, 166, 247));
+    visuals.widgets.active.bg_fill = theme.surface2;
+    visuals.widgets.active.bg_stroke = Stroke::new(1.0, theme.accent2);
     visuals.widgets.active.rounding = Rounding::same(6.0);
 
-    visuals.selection.bg_fill = Color32::from_rgb(69, 71, 90);
-    visuals.selection.stroke = Stroke::new(1.0, Color32::from_rgb(137, 180, 250));
+    visuals.selection.bg_fill = theme.surface1;
+    visuals.selection.stroke = Stroke::new(1.0, theme.accent);
 
     ctx.set_visuals(visuals);
 }

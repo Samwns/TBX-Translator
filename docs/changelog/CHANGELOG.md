@@ -9,12 +9,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Adicionado
 
+- Sistema de personalização visual com 20 temas de cores completos (Catppuccin Mocha/Latte, Nord, Dracula, Gruvbox, Tokyo Night, Rosé Pine, Cyber Neon, etc.), com persistência automática no `config.properties`.
+- Modal interativo com pré-visualização de paletas e aplicação instantânea de temas a partir da aba de Configurações.
+- Aplicação dinâmica e em tempo real do tema em toda a estrutura do aplicativo (fundo da janela, barra de título personalizada, navegação, botões e painéis).
 - Site oficial responsivo no GitHub Pages, com downloads diretos da release mais recente, documentação integrada e seleção de idioma.
 - Atalhos para o site oficial e para as releases do GitHub na barra superior do aplicativo.
 - Geração automática das notas da release e da mensagem do Discord, com publicação opcional por webhook.
-- Atalhos compactos e separados para o Discord e o Ko-fi no canto inferior direito.
+- Atalhos compactos e separados para o Discord e o Ko-fi perfeitamente encaixados no canto inferior direito.
 - Tela de novidades aberta automaticamente uma única vez depois de cada atualização, com confirmação persistente por versão.
-- Ícones SVG para as ações da interface, eliminando quadrados causados por emojis e glifos ausentes na fonte.
+- Ícones SVG e marcadores vetoriais para ações e temas da interface, eliminando quadrados causados por emojis e glifos ausentes na fonte.
 - Cantos arredondados e sombra na janela principal, preservando a barra de título personalizada e o fundo transparente.
 - Atualizador interno para Windows portátil/instalado, AppImage, Debian, Fedora e Arch, com changelog das Releases do GitHub, progresso, SHA-256 e reinício automático.
 - Central de atualizações separada, acessível por um botão compacto com indicador de notificação ao lado da versão do aplicativo.

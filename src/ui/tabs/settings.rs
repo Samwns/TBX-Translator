@@ -63,6 +63,28 @@ impl TbxApp {
 
             ui.add_space(8.0);
 
+            // Theme settings modal button
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Tema Visual (Cores):").color(Color32::from_rgb(205, 214, 244)).strong());
+
+                let current_theme_name = crate::themes::AppTheme::all()
+                    .into_iter()
+                    .find(|t| t.id == self.config.theme_id)
+                    .map(|t| t.name.to_string())
+                    .unwrap_or_else(|| "Catppuccin Mocha".to_string());
+
+                let theme_btn = Button::image_and_text(
+                    egui::Image::new(egui::include_image!("../../../assets/brush_icon.svg"))
+                        .max_size(vec2(14.0, 14.0)),
+                    format!("Mudar Tema ({})", current_theme_name),
+                );
+                if ui.add(theme_btn).clicked() {
+                    self.show_themes_modal = true;
+                }
+            });
+
+            ui.add_space(8.0);
+
             // Engine settings modal button
             let engine_settings = Button::image_and_text(
                 egui::Image::new(egui::include_image!("../../../assets/settings_icon.svg"))

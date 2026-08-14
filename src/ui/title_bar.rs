@@ -4,11 +4,14 @@ use egui::*;
 
 impl TbxApp {
     pub fn render_custom_title_bar(&mut self, ui: &mut Ui, ctx: &Context) {
-        let bar_color = Color32::from_rgb(17, 17, 27); // #11111b
+        let theme = crate::themes::AppTheme::get(&self.config.theme_id);
+        let bar_color = theme.crust;
         let underline_color = if self.engine_mode == 0 {
             Color32::from_rgb(249, 226, 175) // Ren'Py Gold
-        } else {
+        } else if self.engine_mode == 1 {
             Color32::from_rgb(137, 180, 250) // Unity Blue
+        } else {
+            Color32::from_rgb(166, 227, 161) // Godot Green
         };
 
         Frame::none()
@@ -27,7 +30,7 @@ impl TbxApp {
                     ui.add_space(4.0);
                     ui.label(
                         RichText::new("TBX TRANSLATOR")
-                            .color(Color32::WHITE)
+                            .color(theme.text)
                             .strong()
                             .size(15.0),
                     );
@@ -61,8 +64,8 @@ impl TbxApp {
                         if min_resp.hovered() {
                             ui.painter().rect_filled(min_rect, Rounding::same(4.0), Color32::from_rgba_unmultiplied(166, 173, 200, 60));
                         }
-                        let min_color = if min_resp.hovered() { Color32::WHITE } else { Color32::from_rgb(166, 173, 200) };
-                        ui.painter().text(min_rect.center(), Align2::CENTER_CENTER, "—", FontId::proportional(14.0), min_color);
+                        let min_color = if min_resp.hovered() { Color32::WHITE } else { theme.overlay0 };
+                        ui.painter().text(min_rect.center(), Align2::CENTER_CENTER, "-", FontId::proportional(16.0), min_color);
                         if min_resp.clicked() {
                             crate::sound::play(
                                 crate::sound::AppSound::Click,
@@ -83,28 +86,20 @@ impl TbxApp {
         ui.add_space(2.0);
     }
 
-    pub fn render_top_navigation_bar(&mut self, ui: &mut Ui, ctx: &Context) {
+    pub fn render_top_navigation_bar(&mut self, ui: &mut Ui, _ctx: &Context) {
         let lang = &self.config.ui_language;
+        let theme = crate::themes::AppTheme::get(&self.config.theme_id);
 
         Frame::none()
-            .fill(Color32::from_rgb(24, 24, 37)) // #181825
-            .inner_margin(Margin::symmetric(14.0, 10.0)) // increased top/bottom padding
+            .fill(theme.mantle)
+            .inner_margin(Margin::symmetric(14.0, 10.0))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    // StackSwitcher-like segmented control
-                    ui.spacing_mut().item_spacing.x = 0.0; // No gap between tabs
+                    ui.spacing_mut().item_spacing.x = 0.0;
 
                     let nav_tab = |ui: &mut Ui, target: AppTab, icon_source: egui::ImageSource<'_>, label: &str, current: &mut AppTab, is_first: bool, is_last: bool| {
                         let active = *current == target;
-
-                        // Animate transition for the active state
-                        let anim_t = ctx.animate_bool_with_time(ui.id().with("tab_anim").with(target as usize), active, 0.2);
-
-                        // Interpolate background color
-                        let bg_r = (24.0 * (1.0 - anim_t) + 69.0 * anim_t) as u8;
-                        let bg_g = (24.0 * (1.0 - anim_t) + 71.0 * anim_t) as u8;
-                        let bg_b = (37.0 * (1.0 - anim_t) + 90.0 * anim_t) as u8;
-                        let bg_color = Color32::from_rgb(bg_r, bg_g, bg_b);
+                        let bg_color = if active { theme.surface1 } else { theme.mantle };
 
                         let mut rounding = Rounding::ZERO;
                         if is_first { rounding.nw = 6.0; rounding.sw = 6.0; }
@@ -113,12 +108,12 @@ impl TbxApp {
                         let btn = Button::image_and_text(
                             egui::Image::new(icon_source).max_height(16.0),
                             RichText::new(label)
-                                .color(if active { Color32::WHITE } else { Color32::from_rgb(166, 173, 200) })
+                                .color(if active { theme.text } else { theme.overlay0 })
                                 .strong(),
                         )
                         .fill(bg_color)
                         .rounding(rounding)
-                        .min_size(vec2(100.0, 32.0)); // Make tabs thicker and uniform
+                        .min_size(vec2(100.0, 32.0));
 
                         if ui.add(btn).clicked() {
                             *current = target;
@@ -131,14 +126,14 @@ impl TbxApp {
                     nav_tab(ui, AppTab::Tools, egui::include_image!("../../assets/tools_icon.svg"), &t("aba_tools", lang), &mut self.current_tab, false, false);
                     nav_tab(ui, AppTab::Settings, egui::include_image!("../../assets/settings_icon.svg"), &t("aba_config", lang), &mut self.current_tab, false, true);
 
-                    // Contextual active tools (detached from segmented control)
+                    // Contextual active tools
                     if self.current_tab == AppTab::Editor {
                         ui.add_space(12.0);
                         let active_btn = Button::image_and_text(
                             egui::Image::new(egui::include_image!("../../assets/tools_icon.svg")).max_height(16.0),
-                            RichText::new("Editor de Textos").color(Color32::from_rgb(203, 166, 247)).strong()
+                            RichText::new("Editor de Textos").color(theme.accent2).strong()
                         )
-                        .fill(Color32::from_rgb(49, 50, 68))
+                        .fill(theme.surface0)
                         .rounding(Rounding::same(6.0))
                         .min_size(vec2(0.0, 32.0));
                         ui.add(active_btn);
@@ -148,9 +143,9 @@ impl TbxApp {
                         ui.add_space(12.0);
                         let active_btn = Button::image_and_text(
                             egui::Image::new(egui::include_image!("../../assets/font_icon.svg")).max_height(16.0),
-                            RichText::new("Injetor de Fontes").color(Color32::from_rgb(166, 227, 161)).strong()
+                            RichText::new("Injetor de Fontes").color(theme.accent).strong()
                         )
-                        .fill(Color32::from_rgb(49, 50, 68))
+                        .fill(theme.surface0)
                         .rounding(Rounding::same(6.0))
                         .min_size(vec2(0.0, 32.0));
                         ui.add(active_btn);
@@ -162,7 +157,7 @@ impl TbxApp {
                                 "v{} | by samwns",
                                 crate::updater::current_version()
                             ))
-                            .color(Color32::from_rgb(108, 112, 134))
+                            .color(theme.overlay0)
                             .small(),
                         );
                         ui.add_space(6.0);
@@ -174,9 +169,9 @@ impl TbxApp {
                         let fill = if update_available {
                             Color32::from_rgb(49, 74, 63)
                         } else if self.current_tab == AppTab::Updates {
-                            Color32::from_rgb(69, 71, 90)
+                            theme.surface1
                         } else {
-                            Color32::from_rgb(36, 36, 52)
+                            theme.surface0
                         };
                         let response = ui
                             .add(
@@ -203,70 +198,10 @@ impl TbxApp {
                             self.update_notice_unread = false;
                             self.current_tab = AppTab::Updates;
                         }
-
                     });
                 });
             });
 
         ui.separator();
     }
-
-    /// Mantém os atalhos da comunidade fora da navegação principal.
-    pub fn render_social_shortcuts(&mut self, ctx: &Context) {
-        // Ancorado exatamente no canto inferior direito, descontando a margem de 12px da janela invisível
-        egui::Area::new(Id::new("social_shortcuts"))
-            .anchor(Align2::RIGHT_BOTTOM, vec2(-12.0, -12.0))
-            .order(Order::Middle)
-            .show(ctx, |ui| {
-                Frame::none()
-                    .fill(Color32::from_rgb(24, 24, 37))
-                    .stroke(Stroke::new(1.0, Color32::from_rgb(69, 71, 90)))
-                    // O canto inferior direito recebe a mesma curvatura da janela (12.0)
-                    .rounding(Rounding { nw: 12.0, sw: 0.0, ne: 0.0, se: 12.0 })
-                    .inner_margin(Margin::same(4.0))
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 2.0;
-
-                            let discord = ui
-                                .add(
-                                    Button::image(
-                                        egui::Image::new(egui::include_image!(
-                                            "../../assets/discord_icon.svg"
-                                        ))
-                                        .max_size(vec2(17.0, 17.0)),
-                                    )
-                                    .fill(Color32::from_rgb(36, 36, 52))
-                                    .rounding(Rounding { nw: 8.0, sw: 4.0, ne: 4.0, se: 4.0 })
-                                    .min_size(vec2(34.0, 34.0)),
-                                )
-                                .on_hover_text("Entrar no Discord");
-                            if discord.clicked() {
-                                ctx.open_url(egui::OpenUrl::new_tab(
-                                    "https://discord.gg/xsxhvWgWBz",
-                                ));
-                            }
-
-                            let kofi = ui
-                                .add(
-                                    Button::image(
-                                        egui::Image::new(egui::include_image!(
-                                            "../../assets/kofi_icon.svg"
-                                        ))
-                                        .max_size(vec2(17.0, 17.0)),
-                                    )
-                                    .fill(Color32::from_rgb(36, 36, 52))
-                                    .rounding(Rounding { nw: 4.0, sw: 4.0, ne: 4.0, se: 8.0 })
-                                    .min_size(vec2(34.0, 34.0)),
-                                )
-                                .on_hover_text("Apoiar no Ko-fi");
-                            if kofi.clicked() {
-                                ctx.open_url(egui::OpenUrl::new_tab("https://ko-fi.com/samwns"));
-                            }
-                        });
-                    });
-            });
-    }
-
-
 }

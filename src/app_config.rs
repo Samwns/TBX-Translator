@@ -30,6 +30,8 @@ pub struct AppConfig {
     pub godot_injection_mode: String, // "auto", "force_slot" ou "direct_patch"
     /// Idioma nativo que será reutilizado no modo force_slot (ex.: "en").
     pub godot_force_locale: String,
+    /// ID do tema visual ativo.
+    pub theme_id: String,
 }
 
 impl Default for AppConfig {
@@ -53,6 +55,7 @@ impl Default for AppConfig {
             ultima_versao_exibida: String::new(),
             godot_injection_mode: "auto".into(),
             godot_force_locale: "en".into(),
+            theme_id: "catppuccin_mocha".into(),
         }
     }
 }
@@ -100,6 +103,7 @@ impl AppConfig {
         if let Some(v) = props.get("ultimaVersaoExibida")              { cfg.ultima_versao_exibida = v.clone(); }
         if let Some(v) = props.get("godotInjectionMode")               { cfg.godot_injection_mode = v.clone(); }
         if let Some(v) = props.get("godotForceLocale")                  { cfg.godot_force_locale = v.clone(); }
+        if let Some(v) = props.get("themeId")                           { cfg.theme_id = v.clone(); }
 
         cfg
     }
@@ -132,5 +136,6 @@ impl AppConfig {
         let _ = writeln!(file, "ultimaVersaoExibida={}", self.ultima_versao_exibida);
         let _ = writeln!(file, "godotInjectionMode={}", self.godot_injection_mode);
         let _ = writeln!(file, "godotForceLocale={}", self.godot_force_locale);
+        let _ = writeln!(file, "themeId={}", self.theme_id);
     }
 }

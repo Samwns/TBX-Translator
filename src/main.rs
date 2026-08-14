@@ -19,6 +19,7 @@ mod i18n;
 mod paths;
 mod sound;
 mod updater;
+mod themes;
 mod ui;
 
 fn load_icon() -> Option<std::sync::Arc<egui::IconData>> {
