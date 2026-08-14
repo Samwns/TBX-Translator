@@ -53,7 +53,7 @@
   "aplicando_reiniciando": "アップデートを適用して再起動しています...",
   "central_atualizacoes": "アップデートセンター",
   "verificacao_automatica": "アップデートとニュースは起動時に自動的にチェックされます。",
-  "voltar": "← 戻る",
+  "voltar": "戻る",
   "changelog_vazio": "このバージョンには変更点の説明がありません。",
   "efeitos_sonoros": "インターフェイスのサウンドと通知を有効にする"
 }

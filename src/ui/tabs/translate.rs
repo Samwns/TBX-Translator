@@ -145,12 +145,23 @@ impl TbxApp {
             // Live game type badge
             if let Some(status) = &self.detected_game_type {
                 ui.add_space(4.0);
-                let col = if status.contains('✓') {
+                let detected = status.to_lowercase().contains("detectado");
+                let col = if detected {
                     Color32::from_rgb(166, 227, 161)
                 } else {
                     Color32::from_rgb(243, 139, 168)
                 };
-                ui.label(RichText::new(status).color(col).small());
+                ui.horizontal(|ui| {
+                    if detected {
+                        ui.add(
+                            egui::Image::new(egui::include_image!(
+                                "../../../assets/check_icon.svg"
+                            ))
+                            .max_size(vec2(13.0, 13.0)),
+                        );
+                    }
+                    ui.label(RichText::new(status).color(col).small());
+                });
             }
         });
 
@@ -317,7 +328,11 @@ impl TbxApp {
                     });
                     ui.add_space(8.0);
 
-                    let cancel_btn = Button::new(RichText::new("⏹ CANCELAR TRADUÇÃO").color(Color32::WHITE).strong())
+                    let cancel_btn = Button::image_and_text(
+                        egui::Image::new(egui::include_image!("../../../assets/stop_icon.svg"))
+                            .max_size(vec2(15.0, 15.0)),
+                        RichText::new("CANCELAR TRADUÇÃO").color(Color32::WHITE).strong(),
+                    )
                         .fill(Color32::from_rgb(243, 139, 168))
                         .rounding(Rounding::same(8.0))
                         .min_size(vec2(0.0, 40.0));
@@ -348,9 +363,18 @@ impl TbxApp {
         // 5. Quick log preview in translate tab
         ui.group(|ui| {
             ui.horizontal(|ui| {
-                ui.label(RichText::new("📜 Últimos Eventos:").color(Color32::from_rgb(166, 173, 200)).small().strong());
+                ui.add(
+                    egui::Image::new(egui::include_image!("../../../assets/history_icon.svg"))
+                        .max_size(vec2(14.0, 14.0)),
+                );
+                ui.label(RichText::new("Últimos eventos:").color(Color32::from_rgb(166, 173, 200)).small().strong());
                 ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                    if ui.button("Ver Todos os Logs →").clicked() {
+                    let button = Button::image_and_text(
+                        egui::Image::new(egui::include_image!("../../../assets/arrow_right_icon.svg"))
+                            .max_size(vec2(13.0, 13.0)),
+                        "Ver todos os logs",
+                    );
+                    if ui.add(button).clicked() {
                         self.current_tab = AppTab::Logs;
                     }
                 });

@@ -4,7 +4,12 @@ use egui::*;
 impl TbxApp {
     pub fn render_editor_view(&mut self, ui: &mut Ui, ctx: &Context) {
         ui.horizontal(|ui| {
-            if ui.button("← Voltar para Tradução").clicked() {
+            let back_button = Button::image_and_text(
+                egui::Image::new(egui::include_image!("../../../assets/arrow_left_icon.svg"))
+                    .max_size(vec2(14.0, 14.0)),
+                "Voltar para tradução",
+            );
+            if ui.add(back_button).clicked() {
                 self.current_tab = AppTab::Translate;
             }
             ui.label(RichText::new("Editor Manual de Textos").color(Color32::WHITE).strong().size(16.0));

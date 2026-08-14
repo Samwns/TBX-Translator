@@ -53,7 +53,12 @@ impl TbxApp {
         self.update_notice_unread = false;
 
         ui.horizontal(|ui| {
-            if ui.button(t("voltar", &lang)).clicked() {
+            let back_button = Button::image_and_text(
+                egui::Image::new(egui::include_image!("../../../assets/arrow_left_icon.svg"))
+                    .max_size(vec2(14.0, 14.0)),
+                t("voltar", &lang),
+            );
+            if ui.add(back_button).clicked() {
                 self.current_tab = AppTab::Translate;
             }
             ui.add_space(8.0);

@@ -7,12 +7,22 @@ impl TbxApp {
             ui.label(RichText::new("Console de Eventos").color(Color32::WHITE).strong().size(16.0));
 
             ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                if ui.button("🗑 Limpar Logs").clicked() {
+                let clear_button = Button::image_and_text(
+                    egui::Image::new(egui::include_image!("../../../assets/trash_icon.svg"))
+                        .max_size(vec2(14.0, 14.0)),
+                    "Limpar logs",
+                );
+                if ui.add(clear_button).clicked() {
                     if let Some(tab) = self.log_tabs.get_mut(self.active_log_tab) {
                         tab.lines.clear();
                     }
                 }
-                if ui.button("📋 Copiar Logs").clicked() {
+                let copy_button = Button::image_and_text(
+                    egui::Image::new(egui::include_image!("../../../assets/copy_icon.svg"))
+                        .max_size(vec2(14.0, 14.0)),
+                    "Copiar logs",
+                );
+                if ui.add(copy_button).clicked() {
                     if let Some(tab) = self.log_tabs.get(self.active_log_tab) {
                         let text = tab.lines.join("\n");
                         ui.output_mut(|o| o.copied_text = text);

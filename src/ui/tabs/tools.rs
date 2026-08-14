@@ -13,7 +13,13 @@ impl TbxApp {
 
         ui.group(|ui| {
             ui.horizontal(|ui| {
-                ui.label(RichText::new("🔤 Injetor de Fontes:").color(Color32::from_rgb(137, 180, 250)).strong());
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::Image::new(egui::include_image!("../../../assets/font_icon.svg"))
+                            .max_size(vec2(16.0, 16.0)),
+                    );
+                    ui.label(RichText::new("Injetor de fontes:").color(Color32::from_rgb(137, 180, 250)).strong());
+                });
                 ui.label(RichText::new(t("fonte_info", lang)).color(Color32::from_rgb(166, 173, 200)));
             });
 

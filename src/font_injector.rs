@@ -192,14 +192,18 @@ impl FontInjectorState {
     fn render_renpy_tab(&mut self, ui: &mut Ui, ctx: &Context, game_path: &str) {
         ui.horizontal(|ui| {
             let scan_label = if self.is_scanning {
-                "⏳ Escaneando fontes (aguarde)..."
+                "Escaneando fontes (aguarde)..."
             } else if self.renpy_fonts.is_empty() {
-                "🔍 Escanear Fontes do Jogo"
+                "Escanear fontes do jogo"
             } else {
-                "🔄 Escanear Novamente"
+                "Escanear novamente"
             };
 
-            let btn = egui::Button::new(egui::RichText::new(scan_label).color(Color32::from_rgb(17, 17, 27)).strong())
+            let btn = egui::Button::image_and_text(
+                egui::Image::new(egui::include_image!("../assets/search_icon.svg"))
+                    .max_size(egui::vec2(15.0, 15.0)),
+                egui::RichText::new(scan_label).color(Color32::from_rgb(17, 17, 27)).strong(),
+            )
                 .fill(Color32::from_rgb(166, 227, 161));
 
             if ui.add_enabled(!self.is_scanning, btn).clicked() {
@@ -311,14 +315,18 @@ impl FontInjectorState {
     fn render_godot_tab(&mut self, ui: &mut Ui, _ctx: &Context, game_path: &str) {
         ui.horizontal(|ui| {
             let scan_label = if self.is_scanning {
-                "⏳ Escaneando fontes (aguarde)..."
+                "Escaneando fontes (aguarde)..."
             } else if self.godot_fonts.is_empty() {
-                "🔍 Escanear Fontes do PCK (Godot)"
+                "Escanear fontes do PCK (Godot)"
             } else {
-                "🔄 Escanear Novamente"
+                "Escanear novamente"
             };
 
-            let btn = egui::Button::new(egui::RichText::new(scan_label).color(Color32::from_rgb(17, 17, 27)).strong())
+            let btn = egui::Button::image_and_text(
+                egui::Image::new(egui::include_image!("../assets/search_icon.svg"))
+                    .max_size(egui::vec2(15.0, 15.0)),
+                egui::RichText::new(scan_label).color(Color32::from_rgb(17, 17, 27)).strong(),
+            )
                 .fill(Color32::from_rgb(166, 227, 161));
 
             if ui.add_enabled(!self.is_scanning, btn).clicked() {
@@ -375,14 +383,18 @@ impl FontInjectorState {
     fn render_unity_tab(&mut self, ui: &mut Ui, ctx: &Context, game_path: &str) {
         ui.horizontal(|ui| {
             let scan_label = if self.is_scanning {
-                "⏳ Escaneando fontes Unity (aguarde)..."
+                "Escaneando fontes Unity (aguarde)..."
             } else if self.unity_fonts.is_empty() {
-                "🔍 Escanear Fontes do Jogo (Unity)"
+                "Escanear fontes do jogo (Unity)"
             } else {
-                "🔄 Escanear Novamente (Unity)"
+                "Escanear novamente (Unity)"
             };
 
-            let btn = egui::Button::new(egui::RichText::new(scan_label).color(Color32::from_rgb(17, 17, 27)).strong())
+            let btn = egui::Button::image_and_text(
+                egui::Image::new(egui::include_image!("../assets/search_icon.svg"))
+                    .max_size(egui::vec2(15.0, 15.0)),
+                egui::RichText::new(scan_label).color(Color32::from_rgb(17, 17, 27)).strong(),
+            )
                 .fill(Color32::from_rgb(137, 180, 250));
 
             if ui.add_enabled(!self.is_scanning, btn).clicked() {

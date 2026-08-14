@@ -53,7 +53,7 @@
   "aplicando_reiniciando": "S'està aplicant l'actualització i es reinicia...",
   "central_atualizacoes": "Centre d'actualització",
   "verificacao_automatica": "Les actualitzacions i les notícies es revisen automàticament al llançament.",
-  "voltar": "← Tornar",
+  "voltar": "Tornar",
   "changelog_vazio": "Aquesta versió no té una descripció dels canvis.",
   "efeitos_sonoros": "Activa els sons i les notificacions de la interfície"
 }

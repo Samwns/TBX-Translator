@@ -51,6 +51,34 @@ pub static STANDARD_TERMS: &[StandardTerm] = &[
         ko: "게임 시작",
     },
     StandardTerm {
+        key: "Home",
+        pt: "Iniciar",
+        es: "Inicio",
+        en: "Home",
+        fr: "Accueil",
+        de: "Start",
+        it: "Inizio",
+        ru: "Главная",
+        uk: "Головна",
+        ja: "ホーム",
+        zh_cn: "主页",
+        ko: "홈",
+    },
+    StandardTerm {
+        key: "Play",
+        pt: "Iniciar",
+        es: "Jugar",
+        en: "Play",
+        fr: "Jouer",
+        de: "Spielen",
+        it: "Gioca",
+        ru: "Играть",
+        uk: "Грати",
+        ja: "プレイ",
+        zh_cn: "开始",
+        ko: "플레이",
+    },
+    StandardTerm {
         key: "Load",
         pt: "Carregar",
         es: "Cargar",
@@ -1153,6 +1181,8 @@ mod tests {
     #[test]
     fn test_standard_lookups() {
         assert_eq!(lookup("Start", "pt"), Some("Iniciar"));
+        assert_eq!(lookup("Home", "pt"), Some("Iniciar"));
+        assert_eq!(lookup("Play", "pt"), Some("Iniciar"));
         assert_eq!(lookup("Preferences", "pt"), Some("Preferências"));
         assert_eq!(lookup("Quit", "pt"), Some("Sair"));
         assert_eq!(lookup("Save Game", "es"), Some("Guardar Juego"));

@@ -193,12 +193,18 @@ impl EditorState {
 
         // Top bar
         ui.horizontal(|ui| {
-            ui.label(RichText::new("🔍 Buscar:").color(Color32::from_rgb(203, 166, 247)).strong());
+            ui.add(
+                egui::Image::new(egui::include_image!("../assets/search_icon.svg"))
+                    .max_size(egui::vec2(15.0, 15.0)),
+            );
+            ui.label(RichText::new("Buscar:").color(Color32::from_rgb(203, 166, 247)).strong());
             ui.add(TextEdit::singleline(&mut self.search_query).hint_text("Filtrar diálogos ou termos..."));
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let save_btn = egui::Button::new(
-                    RichText::new("💾 Salvar Arquivo")
+                let save_btn = egui::Button::image_and_text(
+                    egui::Image::new(egui::include_image!("../assets/save_icon.svg"))
+                        .max_size(egui::vec2(15.0, 15.0)),
+                    RichText::new("Salvar arquivo")
                         .color(Color32::from_rgb(17, 17, 27))
                         .strong(),
                 )
@@ -225,7 +231,13 @@ impl EditorState {
             .min_width(200.0)
             .default_width(240.0)
             .show_inside(ui, |ui| {
-                ui.label(RichText::new("📂 Arquivos de Tradução").color(Color32::from_rgb(137, 180, 250)).strong());
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::Image::new(egui::include_image!("../assets/file_icon.svg"))
+                            .max_size(egui::vec2(15.0, 15.0)),
+                    );
+                    ui.label(RichText::new("Arquivos de tradução").color(Color32::from_rgb(137, 180, 250)).strong());
+                });
                 ui.add_space(4.0);
 
                 ScrollArea::vertical()
@@ -281,7 +293,14 @@ impl EditorState {
 
                                 ui.horizontal(|ui| {
                                     ui.label(RichText::new("Original:").color(Color32::from_rgb(147, 154, 183)).small());
-                                    if ui.add(egui::Button::new("📋 Copiar").small().fill(Color32::from_rgb(49, 50, 68))).clicked() {
+                                    let copy_button = egui::Button::image_and_text(
+                                        egui::Image::new(egui::include_image!("../assets/copy_icon.svg"))
+                                            .max_size(egui::vec2(12.0, 12.0)),
+                                        "Copiar",
+                                    )
+                                    .small()
+                                    .fill(Color32::from_rgb(49, 50, 68));
+                                    if ui.add(copy_button).clicked() {
                                         ui.output_mut(|o| o.copied_text = entry.original.clone());
                                     }
                                 });

@@ -13,7 +13,12 @@ impl TbxApp {
 
         Frame::none()
             .fill(bar_color)
-            .rounding(0.0)
+            .rounding(Rounding {
+                nw: 12.0,
+                ne: 12.0,
+                sw: 0.0,
+                se: 0.0,
+            })
             .inner_margin(Margin::symmetric(14.0, 8.0))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {

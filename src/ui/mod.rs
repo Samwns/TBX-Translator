@@ -241,13 +241,13 @@ impl TbxApp {
 
         if self.engine_mode == 0 {
             if parent.join("game").is_dir() {
-                self.detected_game_type = Some("Jogo Ren'Py Detectado ✓".to_string());
+                self.detected_game_type = Some("Jogo Ren'Py detectado".to_string());
             } else {
                 self.detected_game_type = Some("Pasta 'game' do Ren'Py não encontrada".to_string());
             }
         } else if self.engine_mode == 1 {
             if let Some(backend) = crate::unity_extractor::detect_unity_backend(path_str) {
-                self.detected_game_type = Some(format!("Unity Detectado ({}) ✓", backend));
+                self.detected_game_type = Some(format!("Jogo Unity detectado ({})", backend));
             } else {
                 self.detected_game_type = Some("Estrutura Unity (*_Data) não encontrada".to_string());
             }
@@ -256,13 +256,13 @@ impl TbxApp {
                 .map(|info| info.locale_codes)
                 .unwrap_or_default();
             if path_str.to_lowercase().ends_with(".pck") {
-                self.detected_game_type = Some("Arquivo PCK do Godot Detectado ✓".to_string());
+                self.detected_game_type = Some("Arquivo PCK do Godot detectado".to_string());
             } else if path.is_file() && path_str.to_lowercase().ends_with(".exe") {
                 let pck_path = path.with_extension("pck");
                 if pck_path.exists() {
-                    self.detected_game_type = Some("Jogo Godot Detectado (via PCK adjacente) ✓".to_string());
+                    self.detected_game_type = Some("Jogo Godot detectado (PCK adjacente)".to_string());
                 } else {
-                    self.detected_game_type = Some("Jogo Godot Detectado (PCK possivelmente embutido no .exe) ✓".to_string());
+                    self.detected_game_type = Some("Jogo Godot detectado (PCK possivelmente embutido no executável)".to_string());
                 }
             } else {
                 self.detected_game_type = Some("Arquivo PCK ou Executável não reconhecido".to_string());
@@ -796,6 +796,10 @@ impl TbxApp {
 }
 
 impl eframe::App for TbxApp {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        egui::Rgba::TRANSPARENT.to_array()
+    }
+
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         self.check_incoming_messages(ctx);
 
@@ -803,15 +807,23 @@ impl eframe::App for TbxApp {
         egui::CentralPanel::default()
             .frame(
                 Frame::none()
-                    .fill(Color32::from_rgb(30, 30, 46))
-                    .inner_margin(Margin::same(0.0)),
+                    .fill(Color32::TRANSPARENT)
+                    .inner_margin(Margin::same(12.0)),
             )
             .show(ctx, |ui| {
                 // Wrapper frame for the actual app content
                 Frame::none()
                     .fill(Color32::from_rgb(30, 30, 46)) // #1e1e2e
-                    .rounding(0.0)
+                    .rounding(Rounding::same(12.0))
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(69, 71, 90)))
+                    .shadow(egui::epaint::Shadow {
+                        offset: egui::vec2(0.0, 4.0),
+                        blur: 18.0,
+                        spread: 1.0,
+                        color: Color32::from_black_alpha(150),
+                    })
                     .show(ui, |ui| {
+                        ui.set_min_size(ui.available_size());
                         self.render_custom_title_bar(ui, ctx);
                         self.render_top_navigation_bar(ui, ctx);
 
@@ -819,7 +831,12 @@ impl eframe::App for TbxApp {
                         Frame::none()
                             .fill(Color32::from_rgb(30, 30, 46))
                             .inner_margin(Margin::same(16.0))
-                            .rounding(0.0)
+                            .rounding(Rounding {
+                                nw: 0.0,
+                                ne: 0.0,
+                                sw: 12.0,
+                                se: 12.0,
+                            })
                             .show(ui, |ui| {
                                 ui.set_min_size(ui.available_size());
                                 match self.current_tab {

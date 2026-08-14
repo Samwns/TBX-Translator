@@ -64,7 +64,12 @@ impl TbxApp {
             ui.add_space(8.0);
 
             // Engine settings modal button
-            if ui.button("⚙ Configurações Extras dos Motores...").clicked() {
+            let engine_settings = Button::image_and_text(
+                egui::Image::new(egui::include_image!("../../../assets/settings_icon.svg"))
+                    .max_size(vec2(14.0, 14.0)),
+                "Configurações extras dos motores...",
+            );
+            if ui.add(engine_settings).clicked() {
                 self.show_engine_modal = true;
             }
 

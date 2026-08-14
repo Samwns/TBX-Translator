@@ -9,6 +9,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Adicionado
 
+- Ícones SVG para as ações da interface, eliminando quadrados causados por emojis e glifos ausentes na fonte.
+- Cantos arredondados e sombra na janela principal, preservando a barra de título personalizada e o fundo transparente.
 - Atualizador interno para Windows portátil/instalado, AppImage, Debian, Fedora e Arch, com changelog das Releases do GitHub, progresso, SHA-256 e reinício automático.
 - Central de atualizações separada, acessível por um botão compacto com indicador de notificação ao lado da versão do aplicativo.
 - Efeitos sonoros para interações da interface, conclusão, cancelamento, erro e nova atualização, com opção para desativá-los nas configurações.
@@ -19,6 +21,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Alterado
 
+- Textos da interface em português foram refinados, incluindo botões de iniciar, voltar, salvar e navegar pelos logs.
+- O dicionário de termos padrão passa a traduzir `Back` como `Voltar` e `Home`/`Play` como `Iniciar` em português.
 - O ícone original de maleta foi restaurado e unificado na janela e nos pacotes Windows, AppImage e Linux nativo.
 - A busca de atualizações saiu das Configurações; a verificação agora é automática e os controles ficam concentrados na nova tela.
 - O Ren'Py não força mais `config.language` nem altera diretamente `_preferences.language`; a escolha passa a ser feita pelo jogador com a ação oficial `Language(...)`.
