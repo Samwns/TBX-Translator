@@ -9,6 +9,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Adicionado
 
+- Site oficial responsivo no GitHub Pages, com downloads diretos da release mais recente, documentação integrada e seleção de idioma.
+- Atalhos para o site oficial e para as releases do GitHub na barra superior do aplicativo.
 - Geração automática das notas da release e da mensagem do Discord, com publicação opcional por webhook.
 - Atalhos compactos para o servidor do Discord e o Ko-fi na barra superior do aplicativo.
 - Ícones SVG para as ações da interface, eliminando quadrados causados por emojis e glifos ausentes na fonte.
@@ -23,6 +25,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Alterado
 
+- README principal agora usa inglês por padrão e mantém uma versão completa em português brasileiro.
 - README reorganizado, com downloads atuais, links da comunidade e versão dinâmica baseada na release mais recente.
 - As releases agora exibem primeiro o resumo das mudanças e depois os downloads.
 - Textos da interface em português foram refinados, incluindo botões de iniciar, voltar, salvar e navegar pelos logs.

@@ -5,3 +5,4 @@
 - Central de atualizações com changelog, download, instalação e reinício do aplicativo.
 - Interface renovada com ícones SVG, sons, notificações, cantos arredondados e suporte a 104 idiomas.
 - Scanner de fontes Ren'Py mais rápido, com detecção direta e compatibilidade ampliada entre versões do motor.
+- Novo site responsivo com downloads diretos, documentação integrada e suporte multilíngue.

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="TBX Translator — game translation toolbox for Ren'Py, Unity and Godot.">
+  <meta name="theme-color" content="#11111b">
+  <title>TBX Translator</title>
+  <link rel="icon" href="assets/com.tbx.translator.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="TBX Translator home">
+      <img src="assets/com.tbx.translator.svg" alt="" width="34" height="34">
+      <span>TBX Translator</span>
+    </a>
+    <button class="menu-button" type="button" aria-label="Open navigation" aria-expanded="false">☰</button>
+    <nav class="main-nav" aria-label="Main navigation">
+      <a href="#features" data-i18n="nav_features">Features</a>
+      <a href="#downloads" data-i18n="nav_downloads">Downloads</a>
+      <a href="docs.html" data-i18n="nav_docs">Documentation</a>
+      <a href="https://github.com/Samwns/TBX-Translator/releases/latest">GitHub Releases</a>
+    </nav>
+    <div class="language-tools">
+      <label class="language-select">
+        <span class="sr-only">Language</span>
+        <select id="native-language" aria-label="Language">
+          <option value="en">English</option>
+          <option value="pt-BR">Português (Brasil)</option>
+        </select>
+      </label>
+      <div id="google_translate_element" title="More languages"></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <span class="eyebrow" data-i18n="eyebrow">Native desktop translation toolbox</span>
+        <h1 data-i18n="hero_title">Translate games with control, speed and reliable formatting.</h1>
+        <p data-i18n="hero_text">Extract, translate, review and install text for Ren'Py, Unity and Godot from one focused application.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#downloads" data-i18n="download_latest">Download latest version</a>
+          <a class="button secondary" href="docs.html" data-i18n="read_docs">Read documentation</a>
+        </div>
+        <p class="release-status"><span data-i18n="latest_release">Latest release</span>: <strong id="release-version">Loading…</strong></p>
+      </div>
+      <div class="hero-panel" aria-label="Supported engines">
+        <article><img src="assets/renpy_icon.svg" alt=""><div><strong>Ren'Py</strong><span data-i18n="renpy_desc">Dialogue, language menus and fonts</span></div></article>
+        <article><img src="assets/unity_icon.svg" alt=""><div><strong>Unity</strong><span data-i18n="unity_desc">Mono, IL2CPP and XUnity workflows</span></div></article>
+        <article><img src="assets/godot_icon.svg" alt=""><div><strong>Godot</strong><span data-i18n="godot_desc">PCK, PO and native catalogs</span></div></article>
+      </div>
+    </section>
+
+    <section id="features" class="section">
+      <div class="section-heading"><span class="eyebrow" data-i18n="why_tbx">Why TBX Translator</span><h2 data-i18n="features_title">A complete translation workflow</h2></div>
+      <div class="card-grid features-grid">
+        <article class="card"><span class="card-icon">01</span><h3 data-i18n="feature_extract_title">Broad extraction</h3><p data-i18n="feature_extract_text">Find interface text, dialogue and story content across supported engines.</p></article>
+        <article class="card"><span class="card-icon">02</span><h3 data-i18n="feature_format_title">Formatting protection</h3><p data-i18n="feature_format_text">Keep variables, BBCode, tags, whitespace and placeholders in their original positions.</p></article>
+        <article class="card"><span class="card-icon">03</span><h3 data-i18n="feature_review_title">Review before install</h3><p data-i18n="feature_review_text">Inspect and adjust generated translations in the built-in editor.</p></article>
+        <article class="card"><span class="card-icon">04</span><h3 data-i18n="feature_tasks_title">Independent tasks</h3><p data-i18n="feature_tasks_text">Run engines separately with progress, logs, cache and cancellation.</p></article>
+      </div>
+    </section>
+
+    <section id="downloads" class="section downloads-section">
+      <div class="section-heading"><span class="eyebrow" data-i18n="get_app">Get the application</span><h2 data-i18n="downloads_title">Downloads</h2><p data-i18n="downloads_text">Files are loaded directly from the latest GitHub release.</p></div>
+      <div id="download-grid" class="card-grid download-grid" aria-live="polite">
+        <article class="card loading-card" data-i18n="loading_downloads">Loading available downloads…</article>
+      </div>
+      <p id="download-error" class="notice hidden"><span data-i18n="download_error">Could not load individual files.</span> <a href="https://github.com/Samwns/TBX-Translator/releases/latest" data-i18n="open_release">Open the latest release</a>.</p>
+    </section>
+
+    <section class="section docs-callout">
+      <div><span class="eyebrow" data-i18n="learn_more">Learn more</span><h2 data-i18n="docs_title">All documentation in one place</h2><p data-i18n="docs_text">Browse guides, architecture, API notes, changelog and development records without leaving the site.</p></div>
+      <a class="button primary" href="docs.html" data-i18n="open_docs">Open documentation</a>
+    </section>
+  </main>
+
+  <footer><span>TBX Translator · CC BY-NC-SA 4.0</span><span><a href="https://github.com/Samwns/TBX-Translator">GitHub</a> · <a href="https://ko-fi.com/samwns">Ko-fi</a></span></footer>
+
+  <script src="app.js"></script>
+  <script>function googleTranslateElementInit(){new google.translate.TranslateElement({pageLanguage:'en',layout:google.translate.TranslateElement.InlineLayout.SIMPLE,autoDisplay:false},'google_translate_element')}</script>
+  <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" async></script>
+</body>
+</html>

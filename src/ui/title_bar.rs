@@ -204,11 +204,11 @@ impl TbxApp {
                             self.current_tab = AppTab::Updates;
                         }
 
-                        let discord = ui
+                        let website = ui
                             .add(
                                 Button::image(
                                     egui::Image::new(egui::include_image!(
-                                        "../../assets/discord_icon.svg"
+                                        "../../assets/website_icon.svg"
                                     ))
                                     .max_size(vec2(15.0, 15.0)),
                                 )
@@ -216,9 +216,30 @@ impl TbxApp {
                                 .rounding(Rounding::same(5.0))
                                 .min_size(vec2(27.0, 27.0)),
                             )
-                            .on_hover_text("Entrar no servidor do Discord");
-                        if discord.clicked() {
-                            ctx.open_url(egui::OpenUrl::new_tab("https://discord.gg/xsxhvWgWBz"));
+                            .on_hover_text("Abrir o site do TBX Translator");
+                        if website.clicked() {
+                            ctx.open_url(egui::OpenUrl::new_tab(
+                                "https://samwns.github.io/TBX-Translator/",
+                            ));
+                        }
+
+                        let releases = ui
+                            .add(
+                                Button::image(
+                                    egui::Image::new(egui::include_image!(
+                                        "../../assets/github_icon.svg"
+                                    ))
+                                    .max_size(vec2(15.0, 15.0)),
+                                )
+                                .fill(Color32::from_rgb(36, 36, 52))
+                                .rounding(Rounding::same(5.0))
+                                .min_size(vec2(27.0, 27.0)),
+                            )
+                            .on_hover_text("Abrir releases no GitHub");
+                        if releases.clicked() {
+                            ctx.open_url(egui::OpenUrl::new_tab(
+                                "https://github.com/Samwns/TBX-Translator/releases/latest",
+                            ));
                         }
 
                         let kofi = ui

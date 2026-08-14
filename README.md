@@ -3,44 +3,45 @@
 
   # TBX Translator
 
-  **Extraia, traduza, revise e instale traduções em jogos Ren'Py, Unity e Godot.**
+  **Extract, translate, review, and install translations for Ren'Py, Unity, and Godot games.**
 
-  [![Versão](https://img.shields.io/github/v/release/Samwns/TBX-Translator?display_name=tag&sort=semver&label=vers%C3%A3o)](https://github.com/Samwns/TBX-Translator/releases/latest)
+  [![Version](https://img.shields.io/github/v/release/Samwns/TBX-Translator?display_name=tag&sort=semver&label=version)](https://github.com/Samwns/TBX-Translator/releases/latest)
   [![Downloads](https://img.shields.io/github/downloads/Samwns/TBX-Translator/total?label=downloads)](https://github.com/Samwns/TBX-Translator/releases/latest)
-  [![Licença](https://img.shields.io/badge/licen%C3%A7a-CC%20BY--NC--SA%204.0-lightgrey)](LICENSE)
+  [![License](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-lightgrey)](LICENSE)
 
-  [![Discord](https://img.shields.io/badge/Discord-Entrar%20no%20servidor-5865F2?logo=discord&logoColor=white)](https://discord.gg/xsxhvWgWBz)
-  [![Ko-fi](https://img.shields.io/badge/Ko--fi-Apoiar%20o%20projeto-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/samwns)
+  [![Website](https://img.shields.io/badge/Website-Open-89B4FA?logo=googlechrome&logoColor=white)](https://samwns.github.io/TBX-Translator/)
+  [![GitHub Releases](https://img.shields.io/badge/GitHub-Releases-313244?logo=github&logoColor=white)](https://github.com/Samwns/TBX-Translator/releases/latest)
+  [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20the%20project-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/samwns)
 
-  **Português (Brasil)** · [English](README.en.md)
+  **English** · [Português (Brasil)](README.pt-BR.md)
 </div>
 
-## Recursos
+## Features
 
-- Ren'Py: extração de diálogos, integração do idioma ao menu e injeção de fontes.
-- Unity Mono/IL2CPP: AssetsTools.NET, UnityPy, BepInEx e XUnity AutoTranslator.
-- Godot: catálogos nativos, PO, PCK, recursos binários e arquivos de história.
-- Editor visual para revisar `.rpy`, `.txt` e `.json` antes da instalação.
-- Proteção de variáveis, tags, BBCode, espaços e formatação.
-- Traduções independentes por engine, cache, concorrência controlada e cancelamento.
-- Atualização pelo aplicativo e interface disponível em 104 idiomas.
+- Ren'Py dialogue extraction, language-menu integration, and font injection.
+- Unity Mono/IL2CPP support through AssetsTools.NET, UnityPy, BepInEx, and XUnity AutoTranslator.
+- Godot native catalogs, PO files, PCK packages, binary resources, and story files.
+- Visual editor for reviewing `.rpy`, `.txt`, and `.json` files before installation.
+- Preservation of variables, tags, BBCode, whitespace, and formatting.
+- Independent engine tasks with cache, controlled concurrency, and cancellation.
+- In-app updates and an interface available in 104 languages.
 
-## Baixar
+## Download
 
-A [release mais recente](https://github.com/Samwns/TBX-Translator/releases/latest) oferece:
+The [latest release](https://github.com/Samwns/TBX-Translator/releases/latest) provides:
 
-- Windows portátil (`.zip`) e instalador (`.exe`)
-- Debian/Ubuntu (`.deb`)
-- Fedora (`.rpm`)
-- Arch Linux (`.pkg.tar.zst`)
-- Linux portátil (`.AppImage`)
+- Portable Windows package (`.zip`) and installer (`.exe`)
+- Debian/Ubuntu package (`.deb`)
+- Fedora package (`.rpm`)
+- Arch Linux package (`.pkg.tar.zst`)
+- Portable Linux AppImage (`.AppImage`)
 
-A versão exibida no aplicativo, nos pacotes e nas releases vem do `Cargo.toml`;
-o número do build é acrescentado automaticamente pelo GitHub Actions.
+The application, packages, and releases derive their version from `Cargo.toml`.
+GitHub Actions appends the actual build number automatically.
 
-## Desenvolvimento
+## Development
 
-Requer Rust estável. O .NET SDK 8 é necessário para desenvolver o extrator Unity.
+Development requires stable Rust. The .NET 8 SDK is also required for the Unity extractor.
 
 ```bash
 # Fedora
@@ -52,27 +53,29 @@ sudo apt install dotnet-sdk-8.0 libxcb-render0-dev libxcb-shape0-dev libxcb-xfix
 cargo run
 ```
 
-Para criar os pacotes suportados na plataforma atual:
+Create every package supported on the current platform with:
 
 ```bash
 cargo package-all
 ```
 
-## Documentação
+## Documentation
 
-- [Manual do desenvolvedor](docs/MANUAL_DESENVOLVEDOR_PTBR.md)
-- [Arquitetura](docs/arquitetura/ARQUITETURA.md)
+- [Documentation website](https://samwns.github.io/TBX-Translator/docs.html)
+- [Developer manual](docs/MANUAL_DESENVOLVEDOR_EN.md)
+- [Architecture](docs/arquitetura/ARQUITETURA.md)
 - [API](docs/api/API_MODULE.md)
 - [Changelog](docs/changelog/CHANGELOG.md)
 
-## Comunidade e apoio
+## Website and support
 
-- [Servidor oficial do Discord](https://discord.gg/xsxhvWgWBz)
-- [Apoie o desenvolvimento no Ko-fi](https://ko-fi.com/samwns)
+- [Official website](https://samwns.github.io/TBX-Translator/)
+- [GitHub Releases](https://github.com/Samwns/TBX-Translator/releases/latest)
+- [Support development on Ko-fi](https://ko-fi.com/samwns)
 
-O GitHub também exibe o botão **Sponsor** por meio de `.github/FUNDING.yml`.
+GitHub also displays the **Sponsor** button through `.github/FUNDING.yml`.
 
-## Licença
+## License
 
-Distribuído sob a [CC BY-NC-SA 4.0](LICENSE): uso e redistribuição não comerciais,
-com atribuição e compartilhamento pela mesma licença.
+Distributed under [CC BY-NC-SA 4.0](LICENSE): non-commercial use and
+redistribution with attribution and share-alike licensing.

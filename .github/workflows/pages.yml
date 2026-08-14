@@ -1,0 +1,49 @@
+name: Deploy GitHub Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "docs/**"
+      - "README.md"
+      - "README.pt-BR.md"
+      - "assets/com.tbx.translator.svg"
+      - "assets/renpy_icon.svg"
+      - "assets/unity_icon.svg"
+      - "assets/godot_icon.svg"
+      - ".github/workflows/pages.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Assemble static site
+        run: |
+          mkdir -p _site/assets _site/content
+          cp -a site/. _site/
+          cp -a docs _site/content/docs
+          cp assets/com.tbx.translator.svg assets/renpy_icon.svg assets/unity_icon.svg assets/godot_icon.svg _site/assets/
+          cp README.md README.pt-BR.md _site/content/
+          touch _site/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

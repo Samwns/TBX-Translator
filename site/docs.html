@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#11111b">
+  <title>Documentation · TBX Translator</title>
+  <link rel="icon" href="assets/com.tbx.translator.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="./"><img src="assets/com.tbx.translator.svg" alt="" width="34" height="34"><span>TBX Translator</span></a>
+    <nav class="main-nav docs-nav"><a href="./" data-i18n="back_home">Home</a><a href="https://github.com/Samwns/TBX-Translator/releases/latest">GitHub Releases</a></nav>
+    <div class="language-tools"><select id="native-language" aria-label="Language"><option value="en">English</option><option value="pt-BR">Português (Brasil)</option></select><div id="google_translate_element"></div></div>
+  </header>
+  <main class="docs-layout">
+    <aside class="docs-sidebar">
+      <div><span class="eyebrow" data-i18n="documentation">Documentation</span><h1 data-i18n="docs_library">Library</h1></div>
+      <nav id="docs-list" aria-label="Documentation files"></nav>
+    </aside>
+    <article id="document-viewer" class="document-viewer"><p data-i18n="loading_document">Loading documentation…</p></article>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+  <script src="app.js"></script>
+  <script src="docs.js"></script>
+  <script>function googleTranslateElementInit(){new google.translate.TranslateElement({pageLanguage:'en',layout:google.translate.TranslateElement.InlineLayout.SIMPLE,autoDisplay:false},'google_translate_element')}</script>
+  <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" async></script>
+</body>
+</html>
