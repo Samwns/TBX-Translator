@@ -213,23 +213,21 @@ impl TbxApp {
 
     /// Mantém os atalhos da comunidade fora da navegação principal.
     pub fn render_social_shortcuts(&mut self, ctx: &Context) {
+        // Ancorado exatamente no canto inferior direito, descontando a margem de 12px da janela invisível
         egui::Area::new(Id::new("social_shortcuts"))
-            .anchor(Align2::RIGHT_BOTTOM, vec2(-14.0, -14.0))
+            .anchor(Align2::RIGHT_BOTTOM, vec2(-12.0, -12.0))
             .order(Order::Middle)
             .show(ctx, |ui| {
                 Frame::none()
-                    .fill(Color32::from_rgba_unmultiplied(24, 24, 37, 235))
+                    .fill(Color32::from_rgb(24, 24, 37))
                     .stroke(Stroke::new(1.0, Color32::from_rgb(69, 71, 90)))
-                    .rounding(Rounding::same(10.0))
-                    .inner_margin(Margin::same(6.0))
-                    .shadow(egui::epaint::Shadow {
-                        offset: vec2(0.0, 3.0),
-                        blur: 10.0,
-                        spread: 0.0,
-                        color: Color32::from_black_alpha(110),
-                    })
+                    // O canto inferior direito recebe a mesma curvatura da janela (12.0)
+                    .rounding(Rounding { nw: 12.0, sw: 0.0, ne: 0.0, se: 12.0 })
+                    .inner_margin(Margin::same(4.0))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 2.0;
+
                             let discord = ui
                                 .add(
                                     Button::image(
@@ -239,8 +237,8 @@ impl TbxApp {
                                         .max_size(vec2(17.0, 17.0)),
                                     )
                                     .fill(Color32::from_rgb(36, 36, 52))
-                                    .rounding(Rounding::same(7.0))
-                                    .min_size(vec2(30.0, 30.0)),
+                                    .rounding(Rounding { nw: 8.0, sw: 4.0, ne: 4.0, se: 4.0 })
+                                    .min_size(vec2(34.0, 34.0)),
                                 )
                                 .on_hover_text("Entrar no Discord");
                             if discord.clicked() {
@@ -248,8 +246,6 @@ impl TbxApp {
                                     "https://discord.gg/xsxhvWgWBz",
                                 ));
                             }
-
-                            ui.add_space(8.0);
 
                             let kofi = ui
                                 .add(
@@ -260,8 +256,8 @@ impl TbxApp {
                                         .max_size(vec2(17.0, 17.0)),
                                     )
                                     .fill(Color32::from_rgb(36, 36, 52))
-                                    .rounding(Rounding::same(7.0))
-                                    .min_size(vec2(30.0, 30.0)),
+                                    .rounding(Rounding { nw: 4.0, sw: 4.0, ne: 4.0, se: 8.0 })
+                                    .min_size(vec2(34.0, 34.0)),
                                 )
                                 .on_hover_text("Apoiar no Ko-fi");
                             if kofi.clicked() {
