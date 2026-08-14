@@ -50,5 +50,10 @@
   "versao_mais_recente": "Už používate najnovšiu verziu",
   "baixando_atualizacao": "Sťahuje sa aktualizácia",
   "verificando_integridade": "Kontroluje sa integrita aktualizácie...",
-  "aplicando_reiniciando": "Aplikuje sa aktualizácia a reštartuje sa..."
+  "aplicando_reiniciando": "Aplikuje sa aktualizácia a reštartuje sa...",
+  "central_atualizacoes": "Centrum aktualizácií",
+  "verificacao_automatica": "Aktualizácie a novinky sa automaticky kontrolujú pri spustení.",
+  "voltar": "← Späť",
+  "changelog_vazio": "Táto verzia neobsahuje popis zmien.",
+  "efeitos_sonoros": "Povoliť zvuky rozhrania a upozornenia"
 }

@@ -50,5 +50,10 @@
   "versao_mais_recente": "Usuvele ukunguqulo yakamuva",
   "baixando_atualizacao": "Ilanda isibuyekezo",
   "verificando_integridade": "Ihlola ubuqotho bokubuyekeza...",
-  "aplicando_reiniciando": "Ifaka isibuyekezo futhi iqala kabusha..."
+  "aplicando_reiniciando": "Ifaka isibuyekezo futhi iqala kabusha...",
+  "central_atualizacoes": "Isikhungo Sokuvuselela",
+  "verificacao_automatica": "Izibuyekezo nezindaba zihlolwa ngokuzenzakalelayo lapho kwethulwa.",
+  "voltar": "← Emuva",
+  "changelog_vazio": "Le nguqulo ayinayo incazelo yezinguquko.",
+  "efeitos_sonoros": "Nika amandla imisindo yokusebenzelana nezaziso"
 }

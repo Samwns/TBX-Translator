@@ -50,5 +50,10 @@
   "versao_mais_recente": "Anda sudah menggunakan versi terbaru",
   "baixando_atualizacao": "Mengunduh pembaruan",
   "verificando_integridade": "Memeriksa integritas pembaruan...",
-  "aplicando_reiniciando": "Menerapkan pembaruan dan memulai ulang..."
+  "aplicando_reiniciando": "Menerapkan pembaruan dan memulai ulang...",
+  "central_atualizacoes": "Pusat Pembaruan",
+  "verificacao_automatica": "Pembaruan dan berita secara otomatis diperiksa saat peluncuran.",
+  "voltar": "← Kembali",
+  "changelog_vazio": "Versi ini tidak memiliki penjelasan perubahan.",
+  "efeitos_sonoros": "Aktifkan suara antarmuka dan notifikasi"
 }

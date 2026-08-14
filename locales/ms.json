@@ -50,5 +50,10 @@
   "versao_mais_recente": "Anda sudah menggunakan versi terkini",
   "baixando_atualizacao": "Memuat turun kemas kini",
   "verificando_integridade": "Menyemak integriti kemas kini...",
-  "aplicando_reiniciando": "Menggunakan kemas kini dan memulakan semula..."
+  "aplicando_reiniciando": "Menggunakan kemas kini dan memulakan semula...",
+  "central_atualizacoes": "Pusat Kemas Kini",
+  "verificacao_automatica": "Kemas kini dan berita disemak secara automatik semasa pelancaran.",
+  "voltar": "← Kembali",
+  "changelog_vazio": "Versi ini tidak mempunyai perihalan perubahan.",
+  "efeitos_sonoros": "Dayakan bunyi antara muka dan pemberitahuan"
 }

@@ -50,5 +50,10 @@
   "versao_mais_recente": "أنت بالفعل على الإصدار الأحدث",
   "baixando_atualizacao": "جارٍ تنزيل التحديث",
   "verificando_integridade": "التحقق من سلامة التحديث...",
-  "aplicando_reiniciando": "جارٍ تطبيق التحديث وإعادة التشغيل..."
+  "aplicando_reiniciando": "جارٍ تطبيق التحديث وإعادة التشغيل...",
+  "central_atualizacoes": "مركز التحديث",
+  "verificacao_automatica": "يتم فحص التحديثات والأخبار تلقائيًا عند الإطلاق.",
+  "voltar": "← العودة",
+  "changelog_vazio": "لا يحتوي هذا الإصدار على وصف للتغييرات.",
+  "efeitos_sonoros": "تمكين أصوات الواجهة والإشعارات"
 }

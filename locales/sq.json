@@ -50,5 +50,10 @@
   "versao_mais_recente": "Jeni tashmë në versionin më të fundit",
   "baixando_atualizacao": "Përditësimi po shkarkohet",
   "verificando_integridade": "Po kontrollon integritetin e përditësimit...",
-  "aplicando_reiniciando": "Po aplikohet përditësimi dhe po riniset..."
+  "aplicando_reiniciando": "Po aplikohet përditësimi dhe po riniset...",
+  "central_atualizacoes": "Qendra e përditësimit",
+  "verificacao_automatica": "Përditësimet dhe lajmet kontrollohen automatikisht në fillim.",
+  "voltar": "← Kthehu",
+  "changelog_vazio": "Ky version nuk ka një përshkrim të ndryshimeve.",
+  "efeitos_sonoros": "Aktivizo tingujt dhe njoftimet e ndërfaqes"
 }

@@ -50,5 +50,10 @@
   "versao_mais_recente": "Dir sidd schonn op der leschter Versioun",
   "baixando_atualizacao": "Update eroflueden",
   "verificando_integridade": "Iwwerpréift d'Integritéit vum Update ...",
-  "aplicando_reiniciando": "Update applizéiert an nei starten ..."
+  "aplicando_reiniciando": "Update applizéiert an nei starten ...",
+  "central_atualizacoes": "Update Center",
+  "verificacao_automatica": "Updates an Neiegkeeten ginn automatesch beim Start gepréift.",
+  "voltar": "← Zréck",
+  "changelog_vazio": "Dës Versioun huet keng Beschreiwung vun Ännerungen.",
+  "efeitos_sonoros": "Aktivéiert Interface Kläng an Notifikatiounen"
 }

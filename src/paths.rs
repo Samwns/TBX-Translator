@@ -11,6 +11,10 @@ pub fn app_root() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
+pub fn asset_path(name: &str) -> PathBuf {
+    app_root().join("assets").join(name)
+}
+
 /// Cria um `std::process::Command` com a flag `CREATE_NO_WINDOW` no Windows,
 /// impedindo que janelas pretas de terminal (cmd.exe) fiquem piscando na interface.
 pub fn hidden_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {

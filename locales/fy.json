@@ -50,5 +50,10 @@
   "versao_mais_recente": "Jo binne al op de lêste ferzje",
   "baixando_atualizacao": "Ynladen update",
   "verificando_integridade": "Kontrolearje de yntegriteit fan updates...",
-  "aplicando_reiniciando": "Update tapasse en opnij starte ..."
+  "aplicando_reiniciando": "Update tapasse en opnij starte ...",
+  "central_atualizacoes": "Update Center",
+  "verificacao_automatica": "Updates en nijs wurde automatysk kontrolearre by lansearring.",
+  "voltar": "← Werom",
+  "changelog_vazio": "Dizze ferzje hat gjin beskriuwing fan feroarings.",
+  "efeitos_sonoros": "Ynskeakelje ynterface lûden en notifikaasjes"
 }

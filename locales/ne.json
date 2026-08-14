@@ -50,5 +50,10 @@
   "versao_mais_recente": "तपाईं पहिले नै नवीनतम संस्करणमा हुनुहुन्छ",
   "baixando_atualizacao": "अपडेट डाउनलोड गर्दै",
   "verificando_integridade": "अद्यावधिक अखण्डता जाँच गर्दै...",
-  "aplicando_reiniciando": "अद्यावधिक लागू गर्दै र पुन: सुरु गर्दै..."
+  "aplicando_reiniciando": "अद्यावधिक लागू गर्दै र पुन: सुरु गर्दै...",
+  "central_atualizacoes": "अद्यावधिक केन्द्र",
+  "verificacao_automatica": "अपडेट र समाचारहरू स्वचालित रूपमा लन्चमा जाँच गरिन्छ।",
+  "voltar": "← फिर्ता",
+  "changelog_vazio": "यस संस्करणमा परिवर्तनहरूको विवरण छैन।",
+  "efeitos_sonoros": "इन्टरफेस ध्वनि र सूचनाहरू सक्षम गर्नुहोस्"
 }

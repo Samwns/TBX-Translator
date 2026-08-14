@@ -50,5 +50,10 @@
   "versao_mais_recente": "Siz artıq ən son versiyadasınız",
   "baixando_atualizacao": "Yeniləmə endirilir",
   "verificando_integridade": "Yeniləmə bütövlüyü yoxlanılır...",
-  "aplicando_reiniciando": "Güncəlləmə tətbiq edilir və yenidən işə salınır..."
+  "aplicando_reiniciando": "Güncəlləmə tətbiq edilir və yenidən işə salınır...",
+  "central_atualizacoes": "Yeniləmə Mərkəzi",
+  "verificacao_automatica": "Yeniləmələr və xəbərlər işə salındıqda avtomatik yoxlanılır.",
+  "voltar": "← Geri",
+  "changelog_vazio": "Bu versiyada dəyişikliklərin təsviri yoxdur.",
+  "efeitos_sonoros": "İnterfeys səsləri və bildirişləri aktivləşdirin"
 }

@@ -50,5 +50,10 @@
   "versao_mais_recente": "Korzystasz już z najnowszej wersji",
   "baixando_atualizacao": "Pobieram aktualizację",
   "verificando_integridade": "Sprawdzam integralność aktualizacji...",
-  "aplicando_reiniciando": "Stosowanie aktualizacji i ponowne uruchamianie..."
+  "aplicando_reiniciando": "Stosowanie aktualizacji i ponowne uruchamianie...",
+  "central_atualizacoes": "Centrum aktualizacji",
+  "verificacao_automatica": "Aktualizacje i nowości są automatycznie sprawdzane przy uruchomieniu.",
+  "voltar": "← Powrót",
+  "changelog_vazio": "Ta wersja nie zawiera opisu zmian.",
+  "efeitos_sonoros": "Włącz dźwięki interfejsu i powiadomienia"
 }

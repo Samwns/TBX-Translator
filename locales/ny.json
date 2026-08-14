@@ -50,5 +50,10 @@
   "versao_mais_recente": "Muli kale pa mtundu waposachedwa",
   "baixando_atualizacao": "Kutsitsa zosintha",
   "verificando_integridade": "Kuyang'ana kusasinthika kosintha...",
-  "aplicando_reiniciando": "Tikuyika zosintha ndikuyambitsanso..."
+  "aplicando_reiniciando": "Tikuyika zosintha ndikuyambitsanso...",
+  "central_atualizacoes": "Update Center",
+  "verificacao_automatica": "Zosintha ndi nkhani zimangoyang'aniridwa poyambitsa.",
+  "voltar": "← Kubwerera",
+  "changelog_vazio": "Mtunduwu ulibe kufotokozera zakusintha.",
+  "efeitos_sonoros": "Yambitsani phokoso la mawonekedwe ndi zidziwitso"
 }

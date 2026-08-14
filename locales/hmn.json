@@ -50,5 +50,10 @@
   "versao_mais_recente": "Koj twb nyob ntawm qhov tseeb version",
   "baixando_atualizacao": "Downloading hloov tshiab",
   "verificando_integridade": "Tshawb xyuas qhov tseeb ntawm kev hloov tshiab...",
-  "aplicando_reiniciando": "Thov kev hloov tshiab thiab rov pib dua..."
+  "aplicando_reiniciando": "Thov kev hloov tshiab thiab rov pib dua...",
+  "central_atualizacoes": "Hloov tshiab Center",
+  "verificacao_automatica": "Kev hloov tshiab thiab xov xwm tau raug kuaj xyuas thaum tso tawm.",
+  "voltar": "← Rov qab",
+  "changelog_vazio": "Qhov no version tsis muaj kev piav qhia txog kev hloov pauv.",
+  "efeitos_sonoros": "Qhib lub suab thiab cov ntawv ceeb toom interface"
 }

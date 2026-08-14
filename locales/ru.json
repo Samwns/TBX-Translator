@@ -50,5 +50,10 @@
   "versao_mais_recente": "У вас уже установлена последняя версия",
   "baixando_atualizacao": "Загрузка обновления",
   "verificando_integridade": "Проверка целостности обновления...",
-  "aplicando_reiniciando": "Применение обновления и перезапуск..."
+  "aplicando_reiniciando": "Применение обновления и перезапуск...",
+  "central_atualizacoes": "Центр обновлений",
+  "verificacao_automatica": "Обновления и новости автоматически проверяются при запуске.",
+  "voltar": "← Назад",
+  "changelog_vazio": "В этой версии нет описания изменений.",
+  "efeitos_sonoros": "Включить звуки и уведомления интерфейса"
 }

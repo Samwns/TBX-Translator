@@ -50,5 +50,10 @@
   "versao_mais_recente": "Již používáte nejnovější verzi",
   "baixando_atualizacao": "Stahování aktualizace",
   "verificando_integridade": "Kontrola integrity aktualizace...",
-  "aplicando_reiniciando": "Probíhá použití aktualizace a restartování..."
+  "aplicando_reiniciando": "Probíhá použití aktualizace a restartování...",
+  "central_atualizacoes": "Centrum aktualizací",
+  "verificacao_automatica": "Aktualizace a novinky jsou automaticky kontrolovány při spuštění.",
+  "voltar": "← Zpět",
+  "changelog_vazio": "Tato verze nemá popis změn.",
+  "efeitos_sonoros": "Povolit zvuky a upozornění rozhraní"
 }

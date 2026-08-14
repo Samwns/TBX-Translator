@@ -50,5 +50,10 @@
   "versao_mais_recente": "Шумо аллакай дар версияи охирин ҳастед",
   "baixando_atualizacao": "Зеркашӣ кардани навсозӣ",
   "verificando_integridade": "Тафтиши тамомияти навсозӣ...",
-  "aplicando_reiniciando": "Татбиқи навсозӣ ва бозоғозӣ..."
+  "aplicando_reiniciando": "Татбиқи навсозӣ ва бозоғозӣ...",
+  "central_atualizacoes": "Маркази навсозӣ",
+  "verificacao_automatica": "Навсозиҳо ва хабарҳо ҳангоми оғозёбӣ ба таври худкор тафтиш карда мешаванд.",
+  "voltar": "← Бозгашт",
+  "changelog_vazio": "Ин версия тавсифи тағиротро надорад.",
+  "efeitos_sonoros": "Овозҳо ва огоҳиҳои интерфейсро фаъол созед"
 }

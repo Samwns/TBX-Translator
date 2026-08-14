@@ -50,5 +50,10 @@
   "versao_mais_recente": "تاسو لا دمخه په وروستي نسخه کې یاست",
   "baixando_atualizacao": "اوسمهال ډاونلوډ کول",
   "verificando_integridade": "د تازه بشپړتیا چک کول ...",
-  "aplicando_reiniciando": "تازه کول او بیا پیل کول ..."
+  "aplicando_reiniciando": "تازه کول او بیا پیل کول ...",
+  "central_atualizacoes": "د تازه کولو مرکز",
+  "verificacao_automatica": "تازه او خبرونه په اوتومات ډول په لانچ کې چیک کیږي.",
+  "voltar": "← شاته",
+  "changelog_vazio": "دا نسخه د بدلونونو تفصیل نلري.",
+  "efeitos_sonoros": "د انٹرفیس غږونه او خبرتیاوې فعال کړئ"
 }

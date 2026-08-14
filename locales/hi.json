@@ -50,5 +50,10 @@
   "versao_mais_recente": "आप पहले से ही नवीनतम संस्करण पर हैं",
   "baixando_atualizacao": "अपडेट डाउनलोड हो रहा है",
   "verificando_integridade": "अद्यतन अखंडता की जाँच की जा रही है...",
-  "aplicando_reiniciando": "अद्यतन लागू किया जा रहा है और पुनः प्रारंभ किया जा रहा है..."
+  "aplicando_reiniciando": "अद्यतन लागू किया जा रहा है और पुनः प्रारंभ किया जा रहा है...",
+  "central_atualizacoes": "अद्यतन केंद्र",
+  "verificacao_automatica": "लॉन्च के समय अपडेट और समाचार स्वचालित रूप से जांचे जाते हैं।",
+  "voltar": "← वापस",
+  "changelog_vazio": "इस संस्करण में परिवर्तनों का विवरण नहीं है.",
+  "efeitos_sonoros": "इंटरफ़ेस ध्वनियाँ और सूचनाएं सक्षम करें"
 }

@@ -17,11 +17,12 @@ pub mod dictionary;
 mod locales_gen;
 mod i18n;
 mod paths;
+mod sound;
 mod updater;
 mod ui;
 
 fn load_icon() -> Option<std::sync::Arc<egui::IconData>> {
-    let image_bytes = include_bytes!("../assets/app_icon.png");
+    let image_bytes = include_bytes!("../assets/com.tbx.translator.png");
     if let Ok(img) = image::load_from_memory(image_bytes) {
         let rgba = img.into_rgba8();
         let (width, height) = rgba.dimensions();

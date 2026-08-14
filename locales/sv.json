@@ -50,5 +50,10 @@
   "versao_mais_recente": "Du har redan den senaste versionen",
   "baixando_atualizacao": "Laddar ner uppdatering",
   "verificando_integridade": "Kontrollerar uppdateringsintegriteten...",
-  "aplicando_reiniciando": "Applicerar uppdatering och startar om..."
+  "aplicando_reiniciando": "Applicerar uppdatering och startar om...",
+  "central_atualizacoes": "Uppdateringscenter",
+  "verificacao_automatica": "Uppdateringar och nyheter kontrolleras automatiskt vid lansering.",
+  "voltar": "← Tillbaka",
+  "changelog_vazio": "Denna version har ingen beskrivning av ändringar.",
+  "efeitos_sonoros": "Aktivera gränssnittsljud och aviseringar"
 }

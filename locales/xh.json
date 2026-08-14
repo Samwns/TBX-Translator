@@ -50,5 +50,10 @@
   "versao_mais_recente": "Sele ukwinguqulelo yamva nje",
   "baixando_atualizacao": "Kuthotywa umthwalo wohlaziyo",
   "verificando_integridade": "Ijonga uhlaziyo lwemfezeko...",
-  "aplicando_reiniciando": "Ifaka uhlaziyo kwaye iphinda iqale..."
+  "aplicando_reiniciando": "Ifaka uhlaziyo kwaye iphinda iqale...",
+  "central_atualizacoes": "Iziko loHlaziyo",
+  "verificacao_automatica": "Uhlaziyo kunye neendaba zijongwa ngokuzenzekelayo ekuqalisweni.",
+  "voltar": "← Umva",
+  "changelog_vazio": "Le nguqulo ayinayo inkcazo yotshintsho.",
+  "efeitos_sonoros": "Vumela izandi zojongano kunye nezaziso"
 }

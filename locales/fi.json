@@ -50,5 +50,10 @@
   "versao_mais_recente": "Käytät jo uusinta versiota",
   "baixando_atualizacao": "Ladataan päivitystä",
   "verificando_integridade": "Tarkistetaan päivityksen eheyttä...",
-  "aplicando_reiniciando": "Otetaan päivitystä käyttöön ja käynnistetään uudelleen..."
+  "aplicando_reiniciando": "Otetaan päivitystä käyttöön ja käynnistetään uudelleen...",
+  "central_atualizacoes": "Päivityskeskus",
+  "verificacao_automatica": "Päivitykset ja uutiset tarkistetaan automaattisesti käynnistyksen yhteydessä.",
+  "voltar": "← Takaisin",
+  "changelog_vazio": "Tässä versiossa ei ole kuvausta muutoksista.",
+  "efeitos_sonoros": "Ota käyttöliittymääänet ja ilmoitukset käyttöön"
 }

@@ -50,5 +50,10 @@
   "versao_mais_recente": "Ou deja sou dènye vèsyon an",
   "baixando_atualizacao": "Telechaje aktyalizasyon",
   "verificando_integridade": "Tcheke entegrite aktyalizasyon...",
-  "aplicando_reiniciando": "Ap aplike aktyalizasyon ak rekòmanse..."
+  "aplicando_reiniciando": "Ap aplike aktyalizasyon ak rekòmanse...",
+  "central_atualizacoes": "Sant Mizajou",
+  "verificacao_automatica": "Mizajou ak nouvèl yo tcheke otomatikman nan lansman.",
+  "voltar": "← Retounen",
+  "changelog_vazio": "Vèsyon sa a pa gen yon deskripsyon chanjman yo.",
+  "efeitos_sonoros": "Pèmèt son koòdone ak notifikasyon"
 }

@@ -50,5 +50,10 @@
   "versao_mais_recente": "Sie sind bereits auf der neuesten Version",
   "baixando_atualizacao": "Update wird heruntergeladen",
   "verificando_integridade": "Update-Integrität prüfen...",
-  "aplicando_reiniciando": "Update anwenden und neu starten..."
+  "aplicando_reiniciando": "Update anwenden und neu starten...",
+  "central_atualizacoes": "Update Center",
+  "verificacao_automatica": "Updates und Neuigkeiten werden beim Start automatisch überprüft.",
+  "voltar": "← Zurück",
+  "changelog_vazio": "Diese Version enthält keine Beschreibung der Änderungen.",
+  "efeitos_sonoros": "Aktivieren Sie Schnittstellensounds und Benachrichtigungen"
 }

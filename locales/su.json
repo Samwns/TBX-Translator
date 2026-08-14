@@ -50,5 +50,10 @@
   "versao_mais_recente": "Anjeun tos aya dina versi panganyarna",
   "baixando_atualizacao": "Ngundeur apdet",
   "verificando_integridade": "Mariksa integritas apdet...",
-  "aplicando_reiniciando": "Nerapkeun apdet sareng ngamimitian deui..."
+  "aplicando_reiniciando": "Nerapkeun apdet sareng ngamimitian deui...",
+  "central_atualizacoes": "Puseur Update",
+  "verificacao_automatica": "Pembaruan sareng warta sacara otomatis dipariksa nalika peluncuran.",
+  "voltar": "← Balik deui",
+  "changelog_vazio": "Vérsi ieu teu boga pedaran parobahan.",
+  "efeitos_sonoros": "Aktipkeun sora panganteur sareng bewara"
 }

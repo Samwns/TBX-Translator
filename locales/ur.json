@@ -50,5 +50,10 @@
   "versao_mais_recente": "آپ پہلے ہی تازہ ترین ورژن پر ہیں۔",
   "baixando_atualizacao": "اپ ڈیٹ ڈاؤن لوڈ ہو رہا ہے۔",
   "verificando_integridade": "اپ ڈیٹ کی سالمیت کی جانچ ہو رہی ہے...",
-  "aplicando_reiniciando": "اپ ڈیٹ کا اطلاق اور دوبارہ شروع ہو رہا ہے..."
+  "aplicando_reiniciando": "اپ ڈیٹ کا اطلاق اور دوبارہ شروع ہو رہا ہے...",
+  "central_atualizacoes": "اپ ڈیٹ سینٹر",
+  "verificacao_automatica": "اپ ڈیٹس اور خبریں لانچ کے وقت خود بخود چیک کی جاتی ہیں۔",
+  "voltar": "← واپس",
+  "changelog_vazio": "اس ورژن میں تبدیلیوں کی تفصیل نہیں ہے۔",
+  "efeitos_sonoros": "انٹرفیس آوازوں اور اطلاعات کو فعال کریں۔"
 }

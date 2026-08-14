@@ -50,5 +50,10 @@
   "versao_mais_recente": "Ya estás en la última versión.",
   "baixando_atualizacao": "Descargando actualización",
   "verificando_integridade": "Comprobando la integridad de la actualización...",
-  "aplicando_reiniciando": "Aplicando actualización y reiniciando..."
+  "aplicando_reiniciando": "Aplicando actualización y reiniciando...",
+  "central_atualizacoes": "Centro de actualización",
+  "verificacao_automatica": "Las actualizaciones y noticias se verifican automáticamente en el momento del lanzamiento.",
+  "voltar": "← Volver",
+  "changelog_vazio": "Esta versión no tiene descripción de cambios.",
+  "efeitos_sonoros": "Habilitar sonidos y notificaciones de la interfaz"
 }

@@ -50,5 +50,10 @@
   "versao_mais_recente": "Tha thu mu thràth air an tionndadh as ùire",
   "baixando_atualizacao": "A luchdadh a-nuas",
   "verificando_integridade": "A’ sgrùdadh iomlanachd ùrachadh...",
-  "aplicando_reiniciando": "A’ cur an sàs ùrachadh is ath-thòiseachadh…"
+  "aplicando_reiniciando": "A’ cur an sàs ùrachadh is ath-thòiseachadh…",
+  "central_atualizacoes": "Ionad ùrachadh",
+  "verificacao_automatica": "Thèid ùrachaidhean is naidheachdan a sgrùdadh gu fèin-ghluasadach aig àm cur air bhog.",
+  "voltar": "← Air ais",
+  "changelog_vazio": "Chan eil tuairisgeul air atharraichean aig an tionndadh seo.",
+  "efeitos_sonoros": "Dèan comas air fuaimean eadar-aghaidh agus brathan"
 }

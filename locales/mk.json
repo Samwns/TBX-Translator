@@ -50,5 +50,10 @@
   "versao_mais_recente": "Веќе сте на најновата верзија",
   "baixando_atualizacao": "Се презема ажурирање",
   "verificando_integridade": "Се проверува интегритетот на ажурирањето...",
-  "aplicando_reiniciando": "Се применува ажурирање и се рестартира..."
+  "aplicando_reiniciando": "Се применува ажурирање и се рестартира...",
+  "central_atualizacoes": "Центар за ажурирање",
+  "verificacao_automatica": "Ажурирањата и новостите автоматски се проверуваат при стартувањето.",
+  "voltar": "← Назад",
+  "changelog_vazio": "Оваа верзија нема опис на промените.",
+  "efeitos_sonoros": "Овозможете звуци и известувања од интерфејсот"
 }

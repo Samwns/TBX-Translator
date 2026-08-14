@@ -45,6 +45,10 @@ impl TbxApp {
                         let close_color = if close_resp.hovered() { Color32::WHITE } else { Color32::from_rgb(243, 139, 168) };
                         ui.painter().text(close_rect.center(), Align2::CENTER_CENTER, "X", FontId::proportional(14.0), close_color);
                         if close_resp.clicked() {
+                            crate::sound::play(
+                                crate::sound::AppSound::Click,
+                                self.config.efeitos_sonoros,
+                            );
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
 
@@ -55,6 +59,10 @@ impl TbxApp {
                         let min_color = if min_resp.hovered() { Color32::WHITE } else { Color32::from_rgb(166, 173, 200) };
                         ui.painter().text(min_rect.center(), Align2::CENTER_CENTER, "—", FontId::proportional(14.0), min_color);
                         if min_resp.clicked() {
+                            crate::sound::play(
+                                crate::sound::AppSound::Click,
+                                self.config.efeitos_sonoros,
+                            );
                             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                         }
                     });
@@ -144,46 +152,52 @@ impl TbxApp {
                     }
 
                     ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                        ui.vertical(|ui| {
-                            ui.with_layout(egui::Layout::right_to_left(Align::Min), |ui| {
-                                ui.label(
-                                    RichText::new(format!(
-                                        "v{} | by samwns",
-                                        crate::updater::current_version()
+                        ui.label(
+                            RichText::new(format!(
+                                "v{} | by samwns",
+                                crate::updater::current_version()
+                            ))
+                            .color(Color32::from_rgb(108, 112, 134))
+                            .small(),
+                        );
+                        ui.add_space(6.0);
+
+                        let update_available = self
+                            .update_release
+                            .as_ref()
+                            .is_some_and(|release| crate::updater::is_newer(&release.tag_name));
+                        let fill = if update_available {
+                            Color32::from_rgb(49, 74, 63)
+                        } else if self.current_tab == AppTab::Updates {
+                            Color32::from_rgb(69, 71, 90)
+                        } else {
+                            Color32::from_rgb(36, 36, 52)
+                        };
+                        let response = ui
+                            .add(
+                                Button::image(
+                                    egui::Image::new(egui::include_image!(
+                                        "../../assets/update_icon.svg"
                                     ))
-                                    .color(Color32::from_rgb(108, 112, 134))
-                                    .small(),
-                                );
-                            });
-                            if let Some(release) = self
-                                .update_release
-                                .as_ref()
-                                .filter(|release| crate::updater::is_newer(&release.tag_name))
-                            {
-                                ui.with_layout(egui::Layout::right_to_left(Align::Min), |ui| {
-                                    let message = format!(
-                                        "↑ {}: {}",
-                                        t("nova_versao_disponivel", lang),
-                                        release.tag_name
-                                    );
-                                    if ui
-                                        .add(
-                                            Label::new(
-                                                RichText::new(message)
-                                                    .color(Color32::from_rgb(166, 227, 161))
-                                                    .small()
-                                                    .strong(),
-                                            )
-                                            .sense(Sense::click()),
-                                        )
-                                        .on_hover_text(t("atualizacoes", lang))
-                                        .clicked()
-                                    {
-                                        self.current_tab = AppTab::Settings;
-                                    }
-                                });
-                            }
-                        });
+                                    .max_size(vec2(15.0, 15.0)),
+                                )
+                                .fill(fill)
+                                .rounding(Rounding::same(5.0))
+                                .min_size(vec2(27.0, 27.0)),
+                            )
+                            .on_hover_text(t("central_atualizacoes", lang));
+
+                        if self.update_notice_unread {
+                            ui.painter().circle_filled(
+                                response.rect.right_top() + vec2(-2.0, 2.0),
+                                4.0,
+                                Color32::from_rgb(243, 139, 168),
+                            );
+                        }
+                        if response.clicked() {
+                            self.update_notice_unread = false;
+                            self.current_tab = AppTab::Updates;
+                        }
                     });
                 });
             });

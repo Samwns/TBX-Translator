@@ -10,6 +10,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Adicionado
 
 - Atualizador interno para Windows portátil/instalado, AppImage, Debian, Fedora e Arch, com changelog das Releases do GitHub, progresso, SHA-256 e reinício automático.
+- Central de atualizações separada, acessível por um botão compacto com indicador de notificação ao lado da versão do aplicativo.
+- Efeitos sonoros para interações da interface, conclusão, cancelamento, erro e nova atualização, com opção para desativá-los nas configurações.
 - Suporte completo à extração e injeção de traduções em jogos Godot, incluindo catálogos nativos, PO multilinha, diálogos binários e scripts de história.
 - Tradução em pacotes com concorrência global controlada, cache compartilhado e retentativas progressivas.
 - Execuções independentes para Ren'Py, Unity e Godot, cada uma com progresso, cancelamento e logs próprios.
@@ -17,9 +19,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Alterado
 
+- O ícone original de maleta foi restaurado e unificado na janela e nos pacotes Windows, AppImage e Linux nativo.
+- A busca de atualizações saiu das Configurações; a verificação agora é automática e os controles ficam concentrados na nova tela.
 - O Ren'Py não força mais `config.language` nem altera diretamente `_preferences.language`; a escolha passa a ser feita pelo jogador com a ação oficial `Language(...)`.
 - Variáveis, interpolações e tags Ren'Py são removidas da carga enviada à API e recolocadas nas posições originais.
-- Os 104 idiomas da interface foram completados com as mensagens do atualizador.
+- Os 104 idiomas da interface foram completados com as mensagens da central de atualizações e dos efeitos sonoros.
 - O número do build das GitHub Actions agora é incorporado ao executável.
 
 ### Corrigido

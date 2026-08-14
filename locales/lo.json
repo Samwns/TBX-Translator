@@ -50,5 +50,10 @@
   "versao_mais_recente": "ທ່ານຢູ່ໃນເວີຊັນຫຼ້າສຸດແລ້ວ",
   "baixando_atualizacao": "ກຳລັງດາວໂຫລດອັບເດດ",
   "verificando_integridade": "ກຳລັງກວດສອບຄວາມສົມບູນຂອງອັບເດດ...",
-  "aplicando_reiniciando": "ກຳລັງນຳໃຊ້ການອັບເດດ ແລະເລີ່ມໃໝ່..."
+  "aplicando_reiniciando": "ກຳລັງນຳໃຊ້ການອັບເດດ ແລະເລີ່ມໃໝ່...",
+  "central_atualizacoes": "ອັບເດດສູນ",
+  "verificacao_automatica": "ການອັບເດດ ແລະຂ່າວຈະຖືກກວດສອບໂດຍອັດຕະໂນມັດໃນເວລາເປີດຕົວ.",
+  "voltar": "← ກັບຄືນ",
+  "changelog_vazio": "ສະບັບນີ້ບໍ່ມີຄໍາອະທິບາຍກ່ຽວກັບການປ່ຽນແປງ.",
+  "efeitos_sonoros": "ເປີດໃຊ້ສຽງ ແລະການແຈ້ງເຕືອນໃນການໂຕ້ຕອບ"
 }

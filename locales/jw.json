@@ -50,5 +50,10 @@
   "versao_mais_recente": "Sampeyan wis ana ing versi paling anyar",
   "baixando_atualizacao": "Ngundhuh nganyari",
   "verificando_integridade": "Priksa integritas nganyari...",
-  "aplicando_reiniciando": "Nglamar nganyari lan miwiti maneh..."
+  "aplicando_reiniciando": "Nglamar nganyari lan miwiti maneh...",
+  "central_atualizacoes": "Pusat nganyari",
+  "verificacao_automatica": "Nganyari lan warta kanthi otomatis dicenthang nalika diluncurake.",
+  "voltar": "← Mbalik",
+  "changelog_vazio": "Versi iki ora duwe katrangan babagan owah-owahan.",
+  "efeitos_sonoros": "Aktifake swara antarmuka lan kabar"
 }

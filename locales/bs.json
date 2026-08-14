@@ -50,5 +50,10 @@
   "versao_mais_recente": "Već ste na najnovijoj verziji",
   "baixando_atualizacao": "Preuzimanje ažuriranja",
   "verificando_integridade": "Provjera integriteta ažuriranja...",
-  "aplicando_reiniciando": "Primjena ažuriranja i ponovno pokretanje..."
+  "aplicando_reiniciando": "Primjena ažuriranja i ponovno pokretanje...",
+  "central_atualizacoes": "Centar za ažuriranje",
+  "verificacao_automatica": "Ažuriranja i vijesti se automatski provjeravaju pri pokretanju.",
+  "voltar": "← Nazad",
+  "changelog_vazio": "Ova verzija nema opis promjena.",
+  "efeitos_sonoros": "Omogućite zvukove i obavijesti interfejsa"
 }

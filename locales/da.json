@@ -50,5 +50,10 @@
   "versao_mais_recente": "Du er allerede på den seneste version",
   "baixando_atualizacao": "Downloader opdatering",
   "verificando_integridade": "Tjekker opdateringsintegritet...",
-  "aplicando_reiniciando": "Anvender opdatering og genstarter..."
+  "aplicando_reiniciando": "Anvender opdatering og genstarter...",
+  "central_atualizacoes": "Opdateringscenter",
+  "verificacao_automatica": "Opdateringer og nyheder tjekkes automatisk ved lanceringen.",
+  "voltar": "← Tilbage",
+  "changelog_vazio": "Denne version har ikke en beskrivelse af ændringer.",
+  "efeitos_sonoros": "Aktiver grænsefladelyde og -meddelelser"
 }

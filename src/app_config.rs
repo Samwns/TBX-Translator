@@ -22,6 +22,7 @@ pub struct AppConfig {
     pub preservar_nomes_renpy: bool,
     pub traduzir_nomes_personagens_renpy: bool,
     pub threads_ativas: u32,
+    pub efeitos_sonoros: bool,
     pub ui_language: String, // "pt_BR" or "en_US"
     /// Estratégia usada ao instalar traduções em jogos Godot exportados.
     pub godot_injection_mode: String, // "auto", "force_slot" ou "direct_patch"
@@ -45,6 +46,7 @@ impl Default for AppConfig {
             preservar_nomes_renpy: true,
             traduzir_nomes_personagens_renpy: false,
             threads_ativas: 3,
+            efeitos_sonoros: true,
             ui_language: "pt_BR".into(),
             godot_injection_mode: "auto".into(),
             godot_force_locale: "en".into(),
@@ -90,6 +92,7 @@ impl AppConfig {
         if let Some(v) = props.get("preservarNomesRenpy")              { cfg.preservar_nomes_renpy = v == "true"; }
         if let Some(v) = props.get("traduzirNomesPersonagensRenpy")    { cfg.traduzir_nomes_personagens_renpy = v == "true"; }
         if let Some(v) = props.get("threadsAtivas")                    { cfg.threads_ativas = v.parse::<u32>().unwrap_or(3).clamp(1, 4); }
+        if let Some(v) = props.get("efeitosSonoros")                   { cfg.efeitos_sonoros = v != "false"; }
         if let Some(v) = props.get("uiLanguage")                       { cfg.ui_language = v.clone(); }
         if let Some(v) = props.get("godotInjectionMode")               { cfg.godot_injection_mode = v.clone(); }
         if let Some(v) = props.get("godotForceLocale")                  { cfg.godot_force_locale = v.clone(); }
@@ -120,6 +123,7 @@ impl AppConfig {
         let _ = writeln!(file, "preservarNomesRenpy={}", self.preservar_nomes_renpy);
         let _ = writeln!(file, "traduzirNomesPersonagensRenpy={}", self.traduzir_nomes_personagens_renpy);
         let _ = writeln!(file, "threadsAtivas={}", self.threads_ativas);
+        let _ = writeln!(file, "efeitosSonoros={}", self.efeitos_sonoros);
         let _ = writeln!(file, "uiLanguage={}", self.ui_language);
         let _ = writeln!(file, "godotInjectionMode={}", self.godot_injection_mode);
         let _ = writeln!(file, "godotForceLocale={}", self.godot_force_locale);

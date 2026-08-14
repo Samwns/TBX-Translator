@@ -50,5 +50,10 @@
   "versao_mais_recente": "Már a legújabb verziót használja",
   "baixando_atualizacao": "Frissítés letöltése",
   "verificando_integridade": "Frissítés integritásának ellenőrzése...",
-  "aplicando_reiniciando": "Frissítés alkalmazása és újraindítás..."
+  "aplicando_reiniciando": "Frissítés alkalmazása és újraindítás...",
+  "central_atualizacoes": "Frissítési központ",
+  "verificacao_automatica": "A frissítések és hírek indításkor automatikusan ellenőrzésre kerülnek.",
+  "voltar": "← Vissza",
+  "changelog_vazio": "Ez a verzió nem tartalmazza a változások leírását.",
+  "efeitos_sonoros": "Engedélyezze a felület hangjait és értesítéseit"
 }

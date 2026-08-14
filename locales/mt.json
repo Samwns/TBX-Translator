@@ -50,5 +50,10 @@
   "versao_mais_recente": "Inti diġà fuq l-aħħar verżjoni",
   "baixando_atualizacao": "Tniżżil ta' aġġornament",
   "verificando_integridade": "Tiċċekkja l-integrità tal-aġġornament...",
-  "aplicando_reiniciando": "Qed japplika l-aġġornament u jerġa' jibda..."
+  "aplicando_reiniciando": "Qed japplika l-aġġornament u jerġa' jibda...",
+  "central_atualizacoes": "Aġġornament taċ-Ċentru",
+  "verificacao_automatica": "Aġġornamenti u aħbarijiet huma kkontrollati awtomatikament mat-tnedija.",
+  "voltar": "← Lura",
+  "changelog_vazio": "Din il-verżjoni m'għandhiex deskrizzjoni tal-bidliet.",
+  "efeitos_sonoros": "Ippermetti ħsejjes u notifiki tal-interface"
 }

@@ -50,5 +50,10 @@
   "versao_mais_recente": "Jūs jau izmantojat jaunāko versiju",
   "baixando_atualizacao": "Notiek atjauninājuma lejupielāde",
   "verificando_integridade": "Notiek atjauninājumu integritātes pārbaude...",
-  "aplicando_reiniciando": "Notiek atjauninājuma lietošana un restartēšana..."
+  "aplicando_reiniciando": "Notiek atjauninājuma lietošana un restartēšana...",
+  "central_atualizacoes": "Atjaunināšanas centrs",
+  "verificacao_automatica": "Atjauninājumi un jaunumi tiek automātiski pārbaudīti palaišanas laikā.",
+  "voltar": "← Atpakaļ",
+  "changelog_vazio": "Šajā versijā nav izmaiņu apraksta.",
+  "efeitos_sonoros": "Iespējot interfeisa skaņas un paziņojumus"
 }

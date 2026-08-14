@@ -50,5 +50,10 @@
   "versao_mais_recente": "Bạn đã ở phiên bản mới nhất",
   "baixando_atualizacao": "Đang tải xuống bản cập nhật",
   "verificando_integridade": "Đang kiểm tra tính toàn vẹn của bản cập nhật...",
-  "aplicando_reiniciando": "Đang áp dụng bản cập nhật và khởi động lại..."
+  "aplicando_reiniciando": "Đang áp dụng bản cập nhật và khởi động lại...",
+  "central_atualizacoes": "Trung tâm cập nhật",
+  "verificacao_automatica": "Các bản cập nhật và tin tức được tự động kiểm tra khi khởi chạy.",
+  "voltar": "← Trở lại",
+  "changelog_vazio": "Phiên bản này không có mô tả về những thay đổi.",
+  "efeitos_sonoros": "Bật âm thanh giao diện và thông báo"
 }

@@ -50,5 +50,10 @@
   "versao_mais_recente": "すでに最新バージョンを使用しています",
   "baixando_atualizacao": "アップデートをダウンロードしています",
   "verificando_integridade": "アップデートの整合性をチェックしています...",
-  "aplicando_reiniciando": "アップデートを適用して再起動しています..."
+  "aplicando_reiniciando": "アップデートを適用して再起動しています...",
+  "central_atualizacoes": "アップデートセンター",
+  "verificacao_automatica": "アップデートとニュースは起動時に自動的にチェックされます。",
+  "voltar": "← 戻る",
+  "changelog_vazio": "このバージョンには変更点の説明がありません。",
+  "efeitos_sonoros": "インターフェイスのサウンドと通知を有効にする"
 }

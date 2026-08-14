@@ -50,5 +50,10 @@
   "versao_mais_recente": "Þú ert nú þegar á nýjustu útgáfunni",
   "baixando_atualizacao": "Er að sækja uppfærslu",
   "verificando_integridade": "Athugar uppfærsluheilleika...",
-  "aplicando_reiniciando": "Notar uppfærslu og endurræsir..."
+  "aplicando_reiniciando": "Notar uppfærslu og endurræsir...",
+  "central_atualizacoes": "Uppfærslumiðstöð",
+  "verificacao_automatica": "Uppfærslur og fréttir eru sjálfkrafa athugaðar við ræsingu.",
+  "voltar": "← Til baka",
+  "changelog_vazio": "Þessi útgáfa hefur ekki lýsingu á breytingum.",
+  "efeitos_sonoros": "Virkja viðmótshljóð og tilkynningar"
 }

@@ -50,5 +50,10 @@
   "versao_mais_recente": "Nasa pinakabagong bersyon ka na",
   "baixando_atualizacao": "Nagda-download ng update",
   "verificando_integridade": "Sinusuri ang integridad ng update...",
-  "aplicando_reiniciando": "Inilalapat ang pag-update at pag-restart..."
+  "aplicando_reiniciando": "Inilalapat ang pag-update at pag-restart...",
+  "central_atualizacoes": "Update Center",
+  "verificacao_automatica": "Awtomatikong sinusuri ang mga update at balita sa paglulunsad.",
+  "voltar": "← Bumalik",
+  "changelog_vazio": "Ang bersyon na ito ay walang paglalarawan ng mga pagbabago.",
+  "efeitos_sonoros": "Paganahin ang mga tunog ng interface at mga notification"
 }

@@ -50,5 +50,10 @@
   "versao_mais_recente": "ቀድሞውኑ በአዲሱ ስሪት ላይ ነዎት",
   "baixando_atualizacao": "ዝመናን በማውረድ ላይ",
   "verificando_integridade": "የዝማኔ ትክክለኛነትን በመፈተሽ ላይ...",
-  "aplicando_reiniciando": "ዝማኔን በመተግበር ላይ እና እንደገና በማስጀመር ላይ..."
+  "aplicando_reiniciando": "ዝማኔን በመተግበር ላይ እና እንደገና በማስጀመር ላይ...",
+  "central_atualizacoes": "የዝማኔ ማዕከል",
+  "verificacao_automatica": "ዝማኔዎች እና ዜናዎች በሚነሳበት ጊዜ በራስ-ሰር ምልክት ይደረግባቸዋል።",
+  "voltar": "← ተመለስ",
+  "changelog_vazio": "ይህ ስሪት የለውጦች መግለጫ የለውም።",
+  "efeitos_sonoros": "የበይነገጽ ድምፆችን እና ማሳወቂያዎችን አንቃ"
 }

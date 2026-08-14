@@ -50,5 +50,10 @@
   "versao_mais_recente": "Kasutate juba uusimat versiooni",
   "baixando_atualizacao": "Värskenduse allalaadimine",
   "verificando_integridade": "Värskenduse terviklikkuse kontrollimine...",
-  "aplicando_reiniciando": "Värskenduse rakendamine ja taaskäivitamine..."
+  "aplicando_reiniciando": "Värskenduse rakendamine ja taaskäivitamine...",
+  "central_atualizacoes": "Värskenduskeskus",
+  "verificacao_automatica": "Värskendusi ja uudiseid kontrollitakse käivitamisel automaatselt.",
+  "voltar": "← Tagasi",
+  "changelog_vazio": "Sellel versioonil pole muudatuste kirjeldust.",
+  "efeitos_sonoros": "Luba liidese helid ja märguanded"
 }

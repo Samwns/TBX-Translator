@@ -50,5 +50,10 @@
   "versao_mais_recente": "તમે પહેલેથી જ નવીનતમ સંસ્કરણ પર છો",
   "baixando_atualizacao": "અપડેટ ડાઉનલોડ કરી રહ્યું છે",
   "verificando_integridade": "અપડેટની અખંડિતતા તપાસી રહ્યું છે...",
-  "aplicando_reiniciando": "અપડેટ લાગુ કરી રહ્યાં છીએ અને ફરી શરૂ કરી રહ્યાં છીએ..."
+  "aplicando_reiniciando": "અપડેટ લાગુ કરી રહ્યાં છીએ અને ફરી શરૂ કરી રહ્યાં છીએ...",
+  "central_atualizacoes": "અપડેટ સેન્ટર",
+  "verificacao_automatica": "અપડેટ્સ અને સમાચારો લોન્ચ સમયે આપમેળે તપાસવામાં આવે છે.",
+  "voltar": "← પાછળ",
+  "changelog_vazio": "આ સંસ્કરણમાં ફેરફારોનું વર્ણન નથી.",
+  "efeitos_sonoros": "ઈન્ટરફેસ અવાજો અને સૂચનાઓ સક્ષમ કરો"
 }

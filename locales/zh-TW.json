@@ -50,5 +50,10 @@
   "versao_mais_recente": "您已經是最新版本了",
   "baixando_atualizacao": "正在下載更新",
   "verificando_integridade": "正在檢查更新完整性...",
-  "aplicando_reiniciando": "正在套用更新並重新啟動..."
+  "aplicando_reiniciando": "正在套用更新並重新啟動...",
+  "central_atualizacoes": "更新中心",
+  "verificacao_automatica": "啟動時會自動檢查更新和新聞。",
+  "voltar": "← 返回",
+  "changelog_vazio": "此版本沒有更改說明。",
+  "efeitos_sonoros": "啟用介面聲音和通知"
 }

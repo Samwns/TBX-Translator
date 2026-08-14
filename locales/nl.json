@@ -50,5 +50,10 @@
   "versao_mais_recente": "U bevindt zich al op de nieuwste versie",
   "baixando_atualizacao": "Update downloaden",
   "verificando_integridade": "Update-integriteit controleren...",
-  "aplicando_reiniciando": "Update toepassen en opnieuw opstarten..."
+  "aplicando_reiniciando": "Update toepassen en opnieuw opstarten...",
+  "central_atualizacoes": "Centrum bijwerken",
+  "verificacao_automatica": "Updates en nieuws worden automatisch gecontroleerd bij de lancering.",
+  "voltar": "← Terug",
+  "changelog_vazio": "Deze versie bevat geen beschrijving van wijzigingen.",
+  "efeitos_sonoros": "Schakel interfacegeluiden en meldingen in"
 }

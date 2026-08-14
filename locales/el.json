@@ -50,5 +50,10 @@
   "versao_mais_recente": "Είστε ήδη στην πιο πρόσφατη έκδοση",
   "baixando_atualizacao": "Λήψη ενημέρωσης",
   "verificando_integridade": "Έλεγχος ακεραιότητας ενημέρωσης...",
-  "aplicando_reiniciando": "Εφαρμογή ενημέρωσης και επανεκκίνηση..."
+  "aplicando_reiniciando": "Εφαρμογή ενημέρωσης και επανεκκίνηση...",
+  "central_atualizacoes": "Κέντρο ενημέρωσης",
+  "verificacao_automatica": "Οι ενημερώσεις και τα νέα ελέγχονται αυτόματα κατά την εκκίνηση.",
+  "voltar": "← Πίσω",
+  "changelog_vazio": "Αυτή η έκδοση δεν έχει περιγραφή αλλαγών.",
+  "efeitos_sonoros": "Ενεργοποίηση ήχων και ειδοποιήσεων διεπαφής"
 }

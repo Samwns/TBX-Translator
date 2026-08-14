@@ -50,5 +50,10 @@
   "versao_mais_recente": "You already have the latest version",
   "baixando_atualizacao": "Downloading update",
   "verificando_integridade": "Verifying update integrity...",
-  "aplicando_reiniciando": "Applying update and restarting..."
+  "aplicando_reiniciando": "Applying update and restarting...",
+  "central_atualizacoes": "Update center",
+  "verificacao_automatica": "Updates and news are checked automatically at startup.",
+  "voltar": "← Back",
+  "changelog_vazio": "This release does not include a changelog description.",
+  "efeitos_sonoros": "Enable interface and notification sounds"
 }

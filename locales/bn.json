@@ -50,5 +50,10 @@
   "versao_mais_recente": "আপনি ইতিমধ্যেই সর্বশেষ সংস্করণে রয়েছেন৷",
   "baixando_atualizacao": "আপডেট ডাউনলোড হচ্ছে",
   "verificando_integridade": "আপডেটের অখণ্ডতা পরীক্ষা করা হচ্ছে...",
-  "aplicando_reiniciando": "আপডেট প্রয়োগ এবং পুনরায় চালু করা হচ্ছে..."
+  "aplicando_reiniciando": "আপডেট প্রয়োগ এবং পুনরায় চালু করা হচ্ছে...",
+  "central_atualizacoes": "হালনাগাদ কেন্দ্র",
+  "verificacao_automatica": "লঞ্চের সময় আপডেট এবং খবর স্বয়ংক্রিয়ভাবে চেক করা হয়।",
+  "voltar": "← ফিরে",
+  "changelog_vazio": "এই সংস্করণে পরিবর্তনের বিবরণ নেই।",
+  "efeitos_sonoros": "ইন্টারফেস শব্দ এবং বিজ্ঞপ্তি সক্রিয় করুন"
 }

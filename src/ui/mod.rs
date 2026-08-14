@@ -29,6 +29,7 @@ pub enum AppTab {
     Logs,
     Tools,
     Settings,
+    Updates,
     Editor,
     FontInjector,
 }
@@ -140,6 +141,7 @@ pub struct TbxApp {
     pub update_release: Option<crate::updater::ReleaseInfo>,
     pub update_checking: bool,
     pub update_check_silent: bool,
+    pub update_notice_unread: bool,
     pub update_downloading: bool,
     pub update_status: String,
     pub update_progress: (u64, u64),
@@ -207,6 +209,7 @@ impl TbxApp {
             update_release: None,
             update_checking: false,
             update_check_silent: false,
+            update_notice_unread: false,
             update_downloading: false,
             update_status: String::new(),
             update_progress: (0, 0),
@@ -298,23 +301,27 @@ impl TbxApp {
                     self.progress_text = format!("Traduzindo: {} / {} itens", done, total);
                 }
                 UiMsg::Done(summary) => {
+                    crate::sound::play(crate::sound::AppSound::Success, self.config.efeitos_sonoros);
                     self.is_running = false;
                     self.progress = (0, 0);
                     self.append_log(format!("[Concluído] {}", summary));
                     self.show_alert_modal = Some((false, "Sucesso".to_string(), summary));
                 }
                 UiMsg::Error(err) => {
+                    crate::sound::play(crate::sound::AppSound::Error, self.config.efeitos_sonoros);
                     self.is_running = false;
                     self.progress = (0, 0);
                     self.append_log(format!("[Erro] {}", err));
                     self.show_alert_modal = Some((true, "Erro".to_string(), err));
                 }
                 UiMsg::Cancelled => {
+                    crate::sound::play(crate::sound::AppSound::Cancel, self.config.efeitos_sonoros);
                     self.is_running = false;
                     self.progress = (0, 0);
                     self.append_log("[Aviso] Processo cancelado pelo usuário.".to_string());
                 }
                 UiMsg::EngineDone(engine, summary) => {
+                    crate::sound::play(crate::sound::AppSound::Success, self.config.efeitos_sonoros);
                     self.running_engines[engine] = false;
                     self.engine_progress[engine] = (0, 0);
                     self.is_running = self.running_engines.iter().any(|running| *running);
@@ -325,6 +332,7 @@ impl TbxApp {
                     self.show_alert_modal = Some((false, "Sucesso".to_string(), summary));
                 }
                 UiMsg::EngineError(engine, error) => {
+                    crate::sound::play(crate::sound::AppSound::Error, self.config.efeitos_sonoros);
                     self.running_engines[engine] = false;
                     self.engine_progress[engine] = (0, 0);
                     self.is_running = self.running_engines.iter().any(|running| *running);
@@ -335,6 +343,7 @@ impl TbxApp {
                     self.show_alert_modal = Some((true, "Erro".to_string(), error));
                 }
                 UiMsg::EngineCancelled(engine) => {
+                    crate::sound::play(crate::sound::AppSound::Cancel, self.config.efeitos_sonoros);
                     self.running_engines[engine] = false;
                     self.engine_progress[engine] = (0, 0);
                     self.is_running = self.running_engines.iter().any(|running| *running);
@@ -369,13 +378,23 @@ impl TbxApp {
                 UiMsg::UpdateFound(release) => {
                     self.update_checking = false;
                     self.update_check_silent = false;
-                    if crate::updater::is_newer(&release.tag_name) {
+                    let newer = crate::updater::is_newer(&release.tag_name);
+                    if newer {
+                        self.update_notice_unread = self.current_tab != AppTab::Updates;
+                        ctx.send_viewport_cmd(egui::ViewportCommand::RequestUserAttention(
+                            egui::UserAttentionType::Informational,
+                        ));
+                        crate::sound::play(
+                            crate::sound::AppSound::Notification,
+                            self.config.efeitos_sonoros,
+                        );
                         self.update_status = format!(
                             "{}: {}",
                             t("nova_versao_disponivel", &self.config.ui_language),
                             release.name
                         );
                     } else {
+                        self.update_notice_unread = false;
                         self.update_status = format!(
                             "{} ({})",
                             t("versao_mais_recente", &self.config.ui_language),
@@ -398,6 +417,10 @@ impl TbxApp {
                     if silent {
                         self.update_status.clear();
                     } else {
+                        crate::sound::play(
+                            crate::sound::AppSound::Error,
+                            self.config.efeitos_sonoros,
+                        );
                         self.update_status = error.clone();
                         self.show_alert_modal = Some((true, "Atualização".to_string(), error));
                     }
@@ -804,6 +827,7 @@ impl eframe::App for TbxApp {
                         AppTab::Logs => self.render_logs_tab(ui),
                         AppTab::Tools => self.render_tools_tab(ui, ctx),
                         AppTab::Settings => self.render_settings_tab(ui),
+                        AppTab::Updates => self.render_updates_tab(ui),
                         AppTab::Editor => self.render_editor_view(ui, ctx),
                         AppTab::FontInjector => self.render_font_injector_view(ui, ctx),
                     }
@@ -812,6 +836,30 @@ impl eframe::App for TbxApp {
                         self.render_modals(ctx);
                     });
             });
+
+        let interactive_click = ctx.output(|output| {
+            output.events.iter().any(|event| {
+                matches!(
+                    event,
+                    egui::output::OutputEvent::Clicked(info)
+                        if matches!(
+                            info.typ,
+                            egui::WidgetType::Link
+                                | egui::WidgetType::Button
+                                | egui::WidgetType::Checkbox
+                                | egui::WidgetType::RadioButton
+                                | egui::WidgetType::RadioGroup
+                                | egui::WidgetType::SelectableLabel
+                                | egui::WidgetType::ComboBox
+                                | egui::WidgetType::ImageButton
+                                | egui::WidgetType::CollapsingHeader
+                        )
+                )
+            })
+        });
+        if interactive_click {
+            crate::sound::play(crate::sound::AppSound::Click, self.config.efeitos_sonoros);
+        }
     }
 }
 

@@ -50,5 +50,10 @@
   "versao_mais_recente": "אתה כבר בגרסה האחרונה",
   "baixando_atualizacao": "מוריד עדכון",
   "verificando_integridade": "בודק את תקינות העדכון...",
-  "aplicando_reiniciando": "מחיל עדכון ומפעיל מחדש..."
+  "aplicando_reiniciando": "מחיל עדכון ומפעיל מחדש...",
+  "central_atualizacoes": "מרכז העדכונים",
+  "verificacao_automatica": "עדכונים וחדשות נבדקים אוטומטית בעת ההשקה.",
+  "voltar": "← חזרה",
+  "changelog_vazio": "לגרסה זו אין תיאור של שינויים.",
+  "efeitos_sonoros": "אפשר צלילים והתראות ממשק"
 }

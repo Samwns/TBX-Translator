@@ -50,5 +50,10 @@
   "versao_mais_recente": "Вы ўжо карыстаецеся апошняй версіяй",
   "baixando_atualizacao": "Спампоўка абнаўлення",
   "verificando_integridade": "Праверка цэласнасці абнаўлення...",
-  "aplicando_reiniciando": "Прымяненне абнаўлення і перазапуск..."
+  "aplicando_reiniciando": "Прымяненне абнаўлення і перазапуск...",
+  "central_atualizacoes": "Цэнтр абнаўлення",
+  "verificacao_automatica": "Абнаўленні і навіны аўтаматычна правяраюцца пры запуску.",
+  "voltar": "← Назад",
+  "changelog_vazio": "Гэтая версія не мае апісання змяненняў.",
+  "efeitos_sonoros": "Уключыць гукі інтэрфейсу і апавяшчэнні"
 }
