@@ -15,8 +15,7 @@ use std::sync::Arc;
 use std::thread;
 
 use egui::{
-    vec2, Align, Button, Color32, Context, Frame, Margin, RichText, Rounding, ScrollArea, Stroke,
-    TextEdit, Ui, Visuals,
+    Color32, Context, Frame, Margin, Rounding, Stroke, Visuals,
 };
 
 use crate::app_config::AppConfig;
@@ -650,6 +649,7 @@ impl TbxApp {
         self.append_log("[Aviso] Cancelamento solicitado pelo usuário...".to_string());
     }
 
+    #[allow(dead_code)]
     pub fn handle_messages(&mut self, ctx: &Context) {
         while let Ok(msg) = self.rx.try_recv() {
             match msg {

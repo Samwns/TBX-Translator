@@ -991,18 +991,30 @@ mod tests {
 
     #[test]
     fn parses_multiline_po_values_and_ids() {
-        let entries = parse_po_catalog(include_str!("../dumped_beatbanger/locale/po/en.po"));
-        assert!(entries.len() >= 30);
+        let catalog = r#"
+msgid "MODIFIERS_NOTE_SPEED_DESC"
+msgstr ""
+"Change the speed at which the notes arrive. "
+"This will not change the song."
+
+msgid "ACHIEVEMENT_DESC"
+msgstr "Beat a level"
+" for the first time"
+"#;
+        let entries = parse_po_catalog(catalog);
+        assert_eq!(entries.len(), 2);
         assert!(entries.iter().any(|(id, value)| {
             id == "MODIFIERS_NOTE_SPEED_DESC" && value.starts_with("Change the speed")
+        }));
+        assert!(entries.iter().any(|(id, value)| {
+            id == "ACHIEVEMENT_DESC" && value == "Beat a level for the first time"
         }));
     }
 
     #[test]
     fn extracts_only_visible_strings_from_binary_dialogue_resource() {
-        let values = extract_dialogue_strings_from_resource(include_bytes!(
-            "../dumped_beatbanger/.godot/exported/133200997/export-b1e21b37df99a0aaf84aad6222719dbb-dialogue_how_long.res"
-        ));
+        let resource = b"RSRC\0resource_name\0How long have you been running this place?\0Long enough.\0res://dialogue.gd\0";
+        let values = extract_dialogue_strings_from_resource(resource);
         assert!(values.iter().any(|value| value == "How long have you been running this place?"));
         assert!(values.iter().any(|value| value == "Long enough."));
         assert!(!values.iter().any(|value| value == "resource_name"));

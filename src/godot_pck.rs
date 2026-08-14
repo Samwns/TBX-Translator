@@ -8,14 +8,19 @@ pub struct PckFileEntry {
     pub path: String,
     pub offset: u64,
     pub size: u64,
+    #[allow(dead_code)]
     pub md5: [u8; 16],
+    #[allow(dead_code)]
     pub flags: u32,
 }
 
 #[derive(Debug)]
 pub struct PckArchive {
+    #[allow(dead_code)]
     pub format_version: u32,
+    #[allow(dead_code)]
     pub pack_flags: u32,
+    #[allow(dead_code)]
     pub file_base: u64,
     pub files: Vec<PckFileEntry>,
 }

@@ -1,7 +1,6 @@
 use crate::ui::{TbxApp, AppTab};
 use crate::i18n::t;
 use egui::*;
-use std::path::Path;
 
 impl TbxApp {
     pub fn render_tools_tab(&mut self, ui: &mut Ui, _ctx: &Context) {

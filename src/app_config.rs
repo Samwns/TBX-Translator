@@ -58,10 +58,6 @@ impl AppConfig {
         home.join(".tbx-translator").join("config.properties")
     }
 
-    pub fn config_path_str() -> String {
-        Self::config_path().to_string_lossy().to_string()
-    }
-
     pub fn carregar() -> Self {
         let path = Self::config_path();
         let mut cfg = AppConfig::default();

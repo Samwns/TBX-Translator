@@ -48,10 +48,6 @@ impl Default for FontInjectorState {
 }
 
 impl FontInjectorState {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn set_engine_mode(&mut self, mode: u32) {
         self.engine_tab = if mode == 1 { 1 } else { 0 };
     }
@@ -312,7 +308,7 @@ impl FontInjectorState {
         });
     }
 
-    fn render_godot_tab(&mut self, ui: &mut Ui, ctx: &Context, game_path: &str) {
+    fn render_godot_tab(&mut self, ui: &mut Ui, _ctx: &Context, game_path: &str) {
         ui.horizontal(|ui| {
             let scan_label = if self.is_scanning {
                 "⏳ Escaneando fontes (aguarde)..."

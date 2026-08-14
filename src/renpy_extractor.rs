@@ -283,9 +283,6 @@ pub async fn extract_texts(
         )));
     }
 
-    // Fast Rust Parser check (Removed direct RPY scanning based on user request)
-    let mut candidates: Vec<(String, String, String)> = Vec::new();
-
     let _ = tx.send(UiMsg::Log("[Motor Dump] Preparando injeção via Python...".into()));
 
     // Write injection script
@@ -296,45 +293,51 @@ pub async fn extract_texts(
     // Spawn game process
     let mut proc = spawn_renpy_hidden(executable).map_err(|e| format!("Falha ao iniciar o jogo: {}", e))?;
 
-        // Wait for game to finish or cancellation
-        let mut wait_after_exit = 0;
-        let dump_file = temp_dir.join("dump.txt");
-        let mut was_cancelled = false;
+    // Wait for game to finish or cancellation
+    let mut wait_after_exit = 0;
+    let dump_file = temp_dir.join("dump.txt");
+    let mut extraction_cancelled = false;
 
-        loop {
-            if cancelled.load(Ordering::SeqCst) {
-                let _ = proc.kill();
-                let _ = fs::remove_file(&injection_script);
-                let _ = tx.send(UiMsg::Log("[Aviso] Extração cancelada pelo usuário.".into()));
-                was_cancelled = true;
-                break;
-            }
-
-            if dump_file.exists() {
-                sleep(Duration::from_millis(1000)).await; // wait for file to flush
-                let _ = proc.kill(); // clean up if wrapper lingered
-                break;
-            }
-
-            match proc.try_wait() {
-                Ok(Some(_)) => {
-                    wait_after_exit += 1;
-                    if wait_after_exit > 30 { // 15 seconds wait after process exited
-                        return Err("Falha: O jogo fechou sem gerar o arquivo dump.txt. (Talvez o jogo tenha crashado. Verifique tbx_renpy.log)".to_string());
-                    }
-                },
-                Ok(None) => {
-                    // Still running
-                },
-                Err(e) => return Err(format!("Erro ao monitorar processo: {}", e)),
-            }
-            sleep(Duration::from_millis(500)).await;
+    loop {
+        if cancelled.load(Ordering::SeqCst) {
+            let _ = proc.kill();
+            let _ = fs::remove_file(&injection_script);
+            let _ = tx.send(UiMsg::Log("[Aviso] Extração cancelada pelo usuário.".into()));
+            extraction_cancelled = true;
+            break;
         }
 
-        // Parse dump using the advanced Rust Parser
+        if dump_file.exists() {
+            sleep(Duration::from_millis(1000)).await; // wait for file to flush
+            let _ = proc.kill(); // clean up if wrapper lingered
+            break;
+        }
+
+        match proc.try_wait() {
+            Ok(Some(_)) => {
+                wait_after_exit += 1;
+                if wait_after_exit > 30 { // 15 seconds wait after process exited
+                    return Err("Falha: O jogo fechou sem gerar o arquivo dump.txt. (Talvez o jogo tenha crashado. Verifique tbx_renpy.log)".to_string());
+                }
+            },
+            Ok(None) => {
+                // Still running
+            },
+            Err(e) => return Err(format!("Erro ao monitorar processo: {}", e)),
+        }
+        sleep(Duration::from_millis(500)).await;
+    }
+
+    if extraction_cancelled {
+        let _ = fs::remove_dir_all(&temp_dir);
+        let _ = tx.send(UiMsg::Cancelled);
+        return Ok(());
+    }
+
+    // Parse dump using the advanced Rust Parser
     let dump_content = fs::read_to_string(&dump_file).map_err(|e| e.to_string())?;
 
-    candidates = crate::renpy_parser::parse_dump_content(&dump_content);
+    let candidates = crate::renpy_parser::parse_dump_content(&dump_content);
 
     let _ = tx.send(UiMsg::Log(format!("[Diagnóstico] Dump Engine: {} linhas brutas, {} candidatos limpos e parseados.", dump_content.lines().count(), candidates.len())));
 
@@ -504,7 +507,7 @@ pub async fn extract_texts(
     let escaped_language_id = escape_renpy(&language_id);
     let fallback_flag = if use_fallback_selector { "True" } else { "False" };
     let boot_content = format!(
-        r#"init 999 python:
+        r##"init 999 python:
     tbx_language_labels = dict([("{0}", "{1}")])
     tbx_use_language_overlay = {2}
 
@@ -568,7 +571,7 @@ screen tbx_language_selector():
                 textbutton tbx_language_name(tbx_lang) action [Language(tbx_lang), Hide("tbx_language_selector")]
 
             textbutton _("Close") action Hide("tbx_language_selector")
-"#,
+"##,
         escaped_language_id,
         language_label,
         fallback_flag,

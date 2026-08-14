@@ -1,7 +1,5 @@
 use crate::ui::{TbxApp, AppTab};
-use crate::i18n::t;
 use egui::*;
-use std::path::Path;
 
 impl TbxApp {
     pub fn render_editor_view(&mut self, ui: &mut Ui, ctx: &Context) {

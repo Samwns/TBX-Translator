@@ -1,7 +1,6 @@
-use crate::ui::{TbxApp, AppTab};
+use crate::ui::{AppTab, TbxApp};
 use crate::i18n::t;
 use egui::*;
-use std::path::Path;
 
 impl TbxApp {
     pub fn render_custom_title_bar(&mut self, ui: &mut Ui, ctx: &Context) {
@@ -12,7 +11,7 @@ impl TbxApp {
             Color32::from_rgb(137, 180, 250) // Unity Blue
         };
 
-        let frame_resp = Frame::none()
+        Frame::none()
             .fill(bar_color)
             .rounding(0.0)
             .inner_margin(Margin::symmetric(14.0, 8.0))
@@ -82,7 +81,7 @@ impl TbxApp {
                     // StackSwitcher-like segmented control
                     ui.spacing_mut().item_spacing.x = 0.0; // No gap between tabs
 
-                    let mut nav_tab = |ui: &mut Ui, target: AppTab, icon_source: egui::ImageSource<'_>, label: &str, current: &mut AppTab, is_first: bool, is_last: bool| {
+                    let nav_tab = |ui: &mut Ui, target: AppTab, icon_source: egui::ImageSource<'_>, label: &str, current: &mut AppTab, is_first: bool, is_last: bool| {
                         let active = *current == target;
 
                         // Animate transition for the active state

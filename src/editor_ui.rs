@@ -4,7 +4,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use egui::{Color32, Context, RichText, ScrollArea, TextEdit, Ui, Vec2};
+use egui::{Color32, Context, RichText, ScrollArea, TextEdit, Ui};
 use walkdir::WalkDir;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -19,6 +19,7 @@ pub struct DialogueEntry {
     pub key: String,
     pub original: String,
     pub translated: String,
+    #[allow(dead_code)]
     pub raw_context: String, // metadata or context for reconstruction
 }
 

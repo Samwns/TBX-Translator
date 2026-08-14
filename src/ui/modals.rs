@@ -1,7 +1,5 @@
-use crate::ui::{TbxApp, AppTab};
-use crate::i18n::t;
+use crate::ui::TbxApp;
 use egui::*;
-use std::path::Path;
 
 use crate::ui::toggle_ui;
 
