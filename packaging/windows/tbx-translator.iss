@@ -1,8 +1,7 @@
 #define MyAppName "TBX Translator"
 #define MyAppVersion GetEnv("TBX_PACKAGE_VERSION")
 #if MyAppVersion == ""
-  #undef MyAppVersion
-  #define MyAppVersion "0.0.2-alpha"
+  #error TBX_PACKAGE_VERSION must be provided by the packaging script
 #endif
 #define MyAppPublisher "samwns"
 #define MyAppExeName "TBX-Translator.exe"

@@ -1,40 +1,44 @@
 <div align="center">
-  <img src="assets/com.tbx.translator.svg" width="112" height="112" alt="Ícone do TBX Translator">
+  <img src="assets/com.tbx.translator.svg" width="96" height="96" alt="TBX Translator">
 
   # TBX Translator
 
-  **Ferramenta desktop para extrair, traduzir e injetar textos em jogos Ren'Py e Unity, godot e unreal.**
+  **Extraia, traduza, revise e instale traduções em jogos Ren'Py, Unity e Godot.**
 
-  **Versão: `0.0.2-alpha`**
+  [![Versão](https://img.shields.io/github/v/release/Samwns/TBX-Translator?display_name=tag&sort=semver&label=vers%C3%A3o)](https://github.com/Samwns/TBX-Translator/releases/latest)
+  [![Downloads](https://img.shields.io/github/downloads/Samwns/TBX-Translator/total?label=downloads)](https://github.com/Samwns/TBX-Translator/releases/latest)
+  [![Licença](https://img.shields.io/badge/licen%C3%A7a-CC%20BY--NC--SA%204.0-lightgrey)](LICENSE)
 
-  [![Release](https://img.shields.io/github/v/release/Samwns/TBX-Translator?display_name=tag&sort=semver)](https://github.com/Samwns/TBX-Translator/releases/latest)
-  [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](LICENSE)
-  [![Rust](https://img.shields.io/badge/Rust-2021-orange?logo=rust)](https://www.rust-lang.org/)
-  [![Egui](https://img.shields.io/badge/egui-0.29-blue)](https://github.com/emilk/egui)
-
-  [Português](#sobre) · [English](#about)
-  [![Apoie no Ko-fi](https://img.shields.io/badge/Ko--fi-Apoiar%20o%20projeto-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/samwns)
+  [![Discord](https://img.shields.io/badge/Discord-Entrar%20no%20servidor-5865F2?logo=discord&logoColor=white)](https://discord.gg/xsxhvWgWBz)
+  [![Ko-fi](https://img.shields.io/badge/Ko--fi-Apoiar%20o%20projeto-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/samwns)
 </div>
 
-## Sobre
+## Recursos
 
-O TBX Translator é uma aplicação desktop nativa, feita em Rust e Egui, para
-automatizar a localização de jogos. Ela extrai textos, traduz via Google
-Translate, permite a revisão manual e prepara a injeção no jogo.
+- Ren'Py: extração de diálogos, integração do idioma ao menu e injeção de fontes.
+- Unity Mono/IL2CPP: AssetsTools.NET, UnityPy, BepInEx e XUnity AutoTranslator.
+- Godot: catálogos nativos, PO, PCK, recursos binários e arquivos de história.
+- Editor visual para revisar `.rpy`, `.txt` e `.json` antes da instalação.
+- Proteção de variáveis, tags, BBCode, espaços e formatação.
+- Traduções independentes por engine, cache, concorrência controlada e cancelamento.
+- Atualização pelo aplicativo e interface disponível em 104 idiomas.
 
-- Extração e geração de traduções para jogos Ren'Py
-- Extração de textos Unity Mono e IL2CPP com AssetsTools.NET (base do UABEA)
-  e complemento opcional UnityPy para AssetBundles e Addressables
-- Integração com BepInEx e XUnity AutoTranslator para Unity
-- Editor visual para revisar arquivos `.rpy`, `.txt` e `.json`
-- Proteção de variáveis, tags e formatação durante a tradução
-- Injeção de fontes para caracteres acentuados
-- Interface Egui nativa, sem Electron, WebView ou navegador embutido
-- Interface em português e configurações persistentes locais
+## Baixar
 
-## Executar no Linux
+A [release mais recente](https://github.com/Samwns/TBX-Translator/releases/latest) oferece:
 
-Instale dependências do sistema (para compilação), Rust e .NET SDK 8 para usar também o extrator Unity:
+- Windows portátil (`.zip`) e instalador (`.exe`)
+- Debian/Ubuntu (`.deb`)
+- Fedora (`.rpm`)
+- Arch Linux (`.pkg.tar.zst`)
+- Linux portátil (`.AppImage`)
+
+A versão exibida no aplicativo, nos pacotes e nas releases vem do `Cargo.toml`;
+o número do build é acrescentado automaticamente pelo GitHub Actions.
+
+## Desenvolvimento
+
+Requer Rust estável. O .NET SDK 8 é necessário para desenvolver o extrator Unity.
 
 ```bash
 # Fedora
@@ -46,130 +50,47 @@ sudo apt install dotnet-sdk-8.0 libxcb-render0-dev libxcb-shape0-dev libxcb-xfix
 cargo run
 ```
 
-O código-fonte do UnityPy é distribuído em `third_party/UnityPy` e é usado
-diretamente pelo scanner complementar de AssetBundles/Addressables.
-
-Para uma compilação otimizada:
+Para criar os pacotes suportados na plataforma atual:
 
 ```bash
-cargo build --release
+cargo package-all
 ```
 
-## Releases: Linux e Windows
-
-O workflow **Create release** gera os dois pacotes portáteis:
-
-- `TBX-Translator-Linux-x64.tar.gz`, com o executável `TBX-Translator`;
-- `TBX-Translator-Windows-x64.zip`, com `TBX-Translator.exe` e ícone.
-
-Ambos incluem os assets, o extrator Unity auto-contido e os ZIPs do
-BepInEx/XUnity. Para
-publicar, envie uma tag:
+As mensagens da release e do Discord são geradas a partir de
+[`docs/releases/UPDATE_SUMMARY.md`](docs/releases/UPDATE_SUMMARY.md):
 
 ```bash
-git tag v0.0.2-alpha
-git push origin v0.0.2-alpha
+scripts/generate-release-notes.sh "" 24
 ```
 
-Ou execute o workflow manualmente na aba **Actions** do GitHub. Ao fim, a mesma
-release do GitHub terá os dois downloads.
+Se o secret `DISCORD_WEBHOOK_URL` estiver configurado no repositório, o workflow
+publica automaticamente a mensagem no Discord depois de criar a release.
 
 ## Documentação
 
-- [Manual do desenvolvedor (PT-BR)](docs/MANUAL_DESENVOLVEDOR_PTBR.md)
+- [Manual do desenvolvedor](docs/MANUAL_DESENVOLVEDOR_PTBR.md)
 - [Arquitetura](docs/arquitetura/ARQUITETURA.md)
-- [Módulo de API](docs/api/API_MODULE.md)
+- [API](docs/api/API_MODULE.md)
 - [Changelog](docs/changelog/CHANGELOG.md)
-- [Diário de desenvolvimento](docs/diary/README.md)
+
+## Comunidade e apoio
+
+- [Servidor oficial do Discord](https://discord.gg/xsxhvWgWBz)
+- [Apoie o desenvolvimento no Ko-fi](https://ko-fi.com/samwns)
+
+O GitHub também exibe o botão **Sponsor** por meio de `.github/FUNDING.yml`.
 
 ## Licença
 
-O repositório é público para consulta e colaboração, mas o software é
-**source-available e não comercial**. Modificações e redistribuições gratuitas
-são permitidas desde que mantenham esta licença e os créditos. Não é permitido
-vender, cobrar pelo acesso, incluir em produto ou serviço pago, nem usar o
-projeto ou versões modificadas para finalidade comercial sem autorização prévia
-por escrito.
-Veja [LICENSE](LICENSE).
-
-## Apoie o projeto
-
-Se o TBX Translator ajudar você, considere apoiar seu desenvolvimento no Ko-fi:
-
-[![Apoie no Ko-fi](https://img.shields.io/badge/Ko--fi-Apoiar%20o%20projeto-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/samwns)
+Distribuído sob a [CC BY-NC-SA 4.0](LICENSE): uso e redistribuição não comerciais,
+com atribuição e compartilhamento pela mesma licença.
 
 ---
 
-## About
+### English
 
-TBX Translator is a native Rust and Egui desktop application that automates
-game localization. It extracts text, translates it through Google Translate,
-allows manual review, and prepares the translation for injection into the game.
-
-- Text extraction and translation generation for Ren'Py games
-- Unity Mono and IL2CPP text extraction using AssetsTools.NET (the UABEA base)
-  plus optional UnityPy support for AssetBundles and Addressables
-- BepInEx and XUnity AutoTranslator integration for Unity
-- Visual editor for reviewing `.rpy`, `.txt`, and `.json` files
-- Variable, tag, and formatting protection during translation
-- Font injection for accented characters
-- Native Egui interface, with no Electron, WebView, or embedded browser
-- Portuguese interface and persistent local settings
-
-## Run on Linux
-
-Install system dependencies (for building), Rust, and the .NET SDK 8 to use the Unity extractor too:
-
-```bash
-# Fedora
-sudo dnf install dotnet-sdk-8.0
-
-# Debian/Ubuntu
-sudo apt install dotnet-sdk-8.0 libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
-
-cargo run
-```
-
-For an optimized build:
-
-```bash
-cargo build --release
-```
-
-UnityPy's source is included in `third_party/UnityPy` and is used directly for
-the additional AssetBundle/Addressables scan.
-
-## Linux and Windows releases
-
-The **Create release** workflow produces both portable packages:
-
-- `TBX-Translator-Linux-x64.tar.gz`, containing the `TBX-Translator` executable;
-- `TBX-Translator-Windows-x64.zip`, containing `TBX-Translator.exe` and its icon.
-
-Both include assets, the self-contained Unity extractor, and BepInEx/XUnity ZIP
-files. To publish, push a tag
-or manually run **Create release** from GitHub **Actions**. The resulting GitHub
-release contains both downloads.
-
-## Documentation
-
-- [Developer manual (PT-BR)](docs/MANUAL_DESENVOLVEDOR_PTBR.md)
-- [Architecture](docs/arquitetura/ARQUITETURA.md)
-- [API module](docs/api/API_MODULE.md)
-- [Changelog](docs/changelog/CHANGELOG.md)
-- [Development diary](docs/diary/README.md)
-
-## License
-
-The repository is public for reference and collaboration, but the software is
-**source-available and non-commercial**. Free modifications and redistribution
-are allowed if this license and the credits are retained. Selling, charging for
-access, bundling it in a paid product or service, or using the project or a
-modified version commercially requires prior written permission.
-See [LICENSE](LICENSE).
-
-## Support the project
-
-If TBX Translator helps you, consider supporting its development on Ko-fi:
-
-[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20the%20project-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/samwns)
+TBX Translator is a native Rust/egui desktop tool for extracting, reviewing,
+translating, and installing game text for Ren'Py, Unity, and Godot. Download the
+[latest release](https://github.com/Samwns/TBX-Translator/releases/latest), join
+the [Discord server](https://discord.gg/xsxhvWgWBz), or support development on
+[Ko-fi](https://ko-fi.com/samwns).

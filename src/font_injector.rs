@@ -136,7 +136,9 @@ impl FontInjectorState {
             let unity_active = self.engine_tab == 1;
             let godot_active = self.engine_tab == 2;
 
-            let renpy_btn = egui::Button::new(
+            let renpy_btn = egui::Button::image_and_text(
+                egui::Image::new(egui::include_image!("../assets/renpy_icon.svg"))
+                    .max_size(egui::vec2(14.0, 14.0)),
                 egui::RichText::new("Ren'Py")
                     .color(if renpy_active { Color32::from_rgb(249, 226, 175) } else { Color32::from_rgb(166, 173, 200) })
                     .strong()
@@ -147,7 +149,9 @@ impl FontInjectorState {
                 self.status_message = None;
             }
 
-            let unity_btn = egui::Button::new(
+            let unity_btn = egui::Button::image_and_text(
+                egui::Image::new(egui::include_image!("../assets/unity_icon.svg"))
+                    .max_size(egui::vec2(14.0, 14.0)),
                 egui::RichText::new("Unity")
                     .color(if unity_active { Color32::from_rgb(137, 180, 250) } else { Color32::from_rgb(166, 173, 200) })
                     .strong()
@@ -158,7 +162,9 @@ impl FontInjectorState {
                 self.status_message = None;
             }
 
-            let godot_btn = egui::Button::new(
+            let godot_btn = egui::Button::image_and_text(
+                egui::Image::new(egui::include_image!("../assets/godot_icon.svg"))
+                    .max_size(egui::vec2(14.0, 14.0)),
                 egui::RichText::new("Godot")
                     .color(if godot_active { Color32::from_rgb(166, 227, 161) } else { Color32::from_rgb(166, 173, 200) })
                     .strong()
@@ -176,7 +182,15 @@ impl FontInjectorState {
 
         if let Some((is_err, msg)) = &self.status_message {
             let col = if *is_err { Color32::from_rgb(243, 139, 168) } else { Color32::from_rgb(166, 227, 161) };
-            ui.label(egui::RichText::new(msg).color(col).strong());
+            ui.horizontal(|ui| {
+                let icon = if *is_err {
+                    egui::include_image!("../assets/alert_icon.svg")
+                } else {
+                    egui::include_image!("../assets/check_icon.svg")
+                };
+                ui.add(egui::Image::new(icon).max_size(egui::vec2(15.0, 15.0)));
+                ui.label(egui::RichText::new(msg).color(col).strong());
+            });
             ui.add_space(6.0);
         }
 
@@ -278,10 +292,10 @@ impl FontInjectorState {
                 if let Some((target_font, new_font_file)) = action_to_perform {
                     match inject_renpy_individual(game_path, &new_font_file, &target_font) {
                         Ok(_) => {
-                            self.status_message = Some((false, format!("✅ Fonte '{}' substituída com sucesso!", target_font)));
+                            self.status_message = Some((false, format!("Fonte '{}' substituída com sucesso!", target_font)));
                         }
                         Err(e) => {
-                            self.status_message = Some((true, format!("❌ Erro ao substituir fonte: {}", e)));
+                            self.status_message = Some((true, format!("Erro ao substituir fonte: {}", e)));
                         }
                     }
                 }
@@ -300,11 +314,11 @@ impl FontInjectorState {
                         if dumped_font_path.exists() {
                             let dest = folder.join(font_file_name);
                             match fs::copy(&dumped_font_path, &dest) {
-                                Ok(_) => self.status_message = Some((false, format!("✅ Fonte extraída para:\n{}", dest.display()))),
-                                Err(e) => self.status_message = Some((true, format!("❌ Erro ao extrair fonte: {}", e))),
+                                Ok(_) => self.status_message = Some((false, format!("Fonte extraída para:\n{}", dest.display()))),
+                                Err(e) => self.status_message = Some((true, format!("Erro ao extrair fonte: {}", e))),
                             }
                         } else {
-                            self.status_message = Some((true, "❌ A fonte temporária não foi encontrada.".to_string()));
+                            self.status_message = Some((true, "A fonte temporária não foi encontrada.".to_string()));
                         }
                     }
                 }
@@ -369,10 +383,10 @@ impl FontInjectorState {
                 if let Some((target_font, new_font_file)) = action_to_perform {
                     match inject_godot_individual(game_path, &new_font_file, &target_font) {
                         Ok(_) => {
-                            self.status_message = Some((false, format!("✅ Fonte '{}' substituída com sucesso via patch!", target_font)));
+                            self.status_message = Some((false, format!("Fonte '{}' substituída com sucesso via patch!", target_font)));
                         }
                         Err(e) => {
-                            self.status_message = Some((true, format!("❌ Erro ao substituir fonte: {}", e)));
+                            self.status_message = Some((true, format!("Erro ao substituir fonte: {}", e)));
                         }
                     }
                 }
@@ -486,10 +500,10 @@ impl FontInjectorState {
                 if let Some((target_font, new_font_file)) = action_replace {
                     match inject_unity_individual(game_path, &new_font_file, &target_font) {
                         Ok(_) => {
-                            self.status_message = Some((false, "✅ Fonte Unity substituída com sucesso!".to_string()));
+                            self.status_message = Some((false, "Fonte Unity substituída com sucesso!".to_string()));
                         }
                         Err(e) => {
-                            self.status_message = Some((true, format!("❌ Erro ao substituir fonte Unity: {}", e)));
+                            self.status_message = Some((true, format!("Erro ao substituir fonte Unity: {}", e)));
                         }
                     }
                 }
@@ -501,15 +515,15 @@ impl FontInjectorState {
                                 if let Some(file_name) = p.file_name() {
                                     let dest = folder.join(file_name);
                                     match fs::copy(&p, &dest) {
-                                        Ok(_) => self.status_message = Some((false, format!("✅ Fonte original extraída para:\n{}", dest.display()))),
-                                        Err(e) => self.status_message = Some((true, format!("❌ Erro ao copiar fonte Unity: {}", e))),
+                                        Ok(_) => self.status_message = Some((false, format!("Fonte original extraída para:\n{}", dest.display()))),
+                                        Err(e) => self.status_message = Some((true, format!("Erro ao copiar fonte Unity: {}", e))),
                                     }
                                 } else {
-                                    self.status_message = Some((true, "❌ Erro ao identificar o nome do arquivo da fonte Unity.".to_string()));
+                                    self.status_message = Some((true, "Erro ao identificar o nome do arquivo da fonte Unity.".to_string()));
                                 }
                             }
                             Err(e) => {
-                                self.status_message = Some((true, format!("❌ Erro ao extrair fonte Unity: {}", e)));
+                                self.status_message = Some((true, format!("Erro ao extrair fonte Unity: {}", e)));
                             }
                         }
                     }
@@ -594,6 +608,65 @@ fn rasterize_text_preview(font: &Font, text: &str) -> Option<ColorImage> {
     Some(ColorImage::from_rgba_unmultiplied([width, height], &img_data))
 }
 
+fn scan_unpacked_renpy_fonts(game_dir: &Path) -> Vec<String> {
+    let output_dir = game_dir.join("tbx_temp_fonts");
+    let _ = fs::create_dir_all(&output_dir);
+    let mut fonts = Vec::new();
+
+    for entry in walkdir::WalkDir::new(game_dir)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_file())
+    {
+        let path = entry.path();
+        if path.starts_with(&output_dir) {
+            continue;
+        }
+        let extension = path
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if !matches!(extension.as_str(), "ttf" | "otf" | "woff" | "woff2") {
+            continue;
+        }
+        let Ok(relative) = path.strip_prefix(game_dir) else { continue };
+        let internal_path = relative.to_string_lossy().replace('\\', "/");
+        if let Some(file_name) = path.file_name() {
+            let _ = fs::copy(path, output_dir.join(file_name));
+        }
+        fonts.push(internal_path);
+    }
+
+    fonts.sort();
+    fonts.dedup();
+    fonts
+}
+
+#[cfg(test)]
+mod renpy_font_scan_tests {
+    use super::scan_unpacked_renpy_fonts;
+
+    #[test]
+    fn finds_unpacked_fonts_without_starting_renpy() {
+        let root = std::env::temp_dir().join(format!(
+            "tbx-font-scan-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let fonts_dir = root.join("fonts");
+        std::fs::create_dir_all(&fonts_dir).unwrap();
+        std::fs::write(fonts_dir.join("GameFont.ttf"), b"font-test").unwrap();
+
+        let result = scan_unpacked_renpy_fonts(&root);
+
+        assert_eq!(result, vec!["fonts/GameFont.ttf"]);
+        assert!(root.join("tbx_temp_fonts/GameFont.ttf").is_file());
+        let _ = std::fs::remove_dir_all(root);
+    }
+}
+
 pub fn scan_renpy_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
     let original_path = PathBuf::from(game_path_str);
     let mut base_dir = original_path.clone();
@@ -640,6 +713,10 @@ pub fn scan_renpy_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
     if !game_dir.exists() {
         return Err("Pasta 'game' não encontrada.".to_string());
     }
+    // Most Ren'Py projects keep fonts unpacked under game/fonts. Reading them
+    // directly is immediate and works even when an older game cannot finish
+    // booting. The runtime scan below remains as a complement for RPA assets.
+    let mut unpacked_fonts = scan_unpacked_renpy_fonts(&game_dir);
     // Remove only temporary artifacts left by versions that still used the
     // old TPG prefix. Backups are intentionally preserved.
     let _ = fs::remove_dir_all(game_dir.join("tpg_temp_fonts"));
@@ -650,6 +727,10 @@ pub fn scan_renpy_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
         "tpg_font_dumper.rpyc",
     ] {
         let _ = fs::remove_file(game_dir.join(legacy_name));
+    }
+
+    if !unpacked_fonts.is_empty() {
+        return Ok(unpacked_fonts);
     }
 
     let dumper_script = r#"
@@ -714,7 +795,17 @@ init 999 python:
     if done_exists {
         let _ = fs::remove_file(game_dir.join("tbx_fonts.json.done"));
     } else {
-        return Err("O motor do jogo travou ou demorou demais para responder (timeout). Tente novamente.".to_string());
+        if !unpacked_fonts.is_empty() {
+            return Ok(unpacked_fonts);
+        }
+        let runtime_log = base_dir.join("tbx_renpy.log");
+        let detail = fs::read_to_string(runtime_log)
+            .ok()
+            .and_then(|log| log.lines().rev().find(|line| !line.trim().is_empty()).map(str::to_owned))
+            .unwrap_or_else(|| "sem detalhes no log do Ren'Py".to_string());
+        return Err(format!(
+            "O jogo não concluiu a varredura de fontes. Detalhe: {detail}"
+        ));
     }
 
     if !json_path.exists() {
@@ -724,8 +815,11 @@ init 999 python:
     let content = fs::read_to_string(&json_path).map_err(|e| format!("Erro ao ler JSON: {}", e))?;
     let _ = fs::remove_file(&json_path);
 
-    let fonts: Vec<String> = serde_json::from_str(&content).map_err(|e| format!("JSON inválido: {}", e))?;
-    Ok(fonts)
+    let runtime_fonts: Vec<String> = serde_json::from_str(&content).map_err(|e| format!("JSON inválido: {}", e))?;
+    unpacked_fonts.extend(runtime_fonts);
+    unpacked_fonts.sort();
+    unpacked_fonts.dedup();
+    Ok(unpacked_fonts)
 }
 
 pub fn inject_renpy_individual(game_path_str: &str, user_font_path: &Path, target_internal_path: &str) -> Result<(), String> {

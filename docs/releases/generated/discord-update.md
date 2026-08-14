@@ -1,0 +1,15 @@
+# [**TBX Translator v0.0.2 (build 24)**](https://github.com/Samwns/TBX-Translator/releases/latest)
+
+update/changes:
+### Resumo das mudanças
+
+- Extração e injeção Godot ampliadas, incluindo idiomas nativos, arquivos PO, diálogos e textos de história.
+- Integração Ren'Py mais segura, adicionando o novo idioma ao menu do jogo sem forçar a preferência do jogador.
+- Tratamento de strings aprimorado para preservar tags, variáveis, BBCode, espaços e formatação.
+- Traduções independentes por engine, com concorrência controlada, cache, cancelamento e logs separados.
+- Central de atualizações com changelog, download, instalação e reinício do aplicativo.
+- Interface renovada com ícones SVG, sons, notificações, cantos arredondados e suporte a 104 idiomas.
+- Scanner de fontes Ren'Py mais rápido, com detecção direta e compatibilidade ampliada entre versões do motor.
+
+
+@Member @here

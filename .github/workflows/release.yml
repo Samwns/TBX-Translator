@@ -15,18 +15,24 @@ jobs:
     outputs:
       tag_name: ${{ steps.version.outputs.tag_name }}
       release_name: ${{ steps.version.outputs.release_name }}
+      base_version: ${{ steps.version.outputs.base_version }}
+      previous_tag: ${{ steps.version.outputs.previous_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
       - id: version
         shell: bash
         run: |
           base_version="$(sed -nE 's/^version = "([^"]+)"/\1/p' Cargo.toml | head -n 1)"
           base_version="${base_version%%-*}"
           tag_name="v${base_version}-build-${{ github.run_number }}"
+          previous_tag="$(git tag --list "v${base_version}-build-*" --sort=-v:refname | head -n 1)"
+          echo "base_version=${base_version}" >> "$GITHUB_OUTPUT"
           echo "tag_name=${tag_name}" >> "$GITHUB_OUTPUT"
           echo "release_name=TBX Translator v${base_version} (build ${{ github.run_number }})" >> "$GITHUB_OUTPUT"
+          echo "previous_tag=${previous_tag}" >> "$GITHUB_OUTPUT"
 
   linux:
     name: Build Linux x64
@@ -90,10 +96,21 @@ jobs:
     name: Publish GitHub release
     needs: [prepare-release, linux, windows]
     runs-on: ubuntu-latest
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      DISCORD_MEMBER_ROLE_ID: ${{ secrets.DISCORD_MEMBER_ROLE_ID }}
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: release-artifacts
+      - name: Generate release and Discord messages
+        run: |
+          bash scripts/generate-release-notes.sh \
+            "${{ needs.prepare-release.outputs.base_version }}" \
+            "${{ github.run_number }}" \
+            "${{ needs.prepare-release.outputs.previous_tag }}" \
+            release-messages
       - name: Create release with both packages
         uses: softprops/action-gh-release@v2
         with:
@@ -101,28 +118,8 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: ${{ needs.prepare-release.outputs.release_name }}
           prerelease: false
-          generate_release_notes: true
-          body: |
-            ## ${{ needs.prepare-release.outputs.release_name }}
-
-            ### Downloads
-
-            - **Windows (Portátil .zip):** `TBX-Translator-Windows-x64.zip`
-            - **Windows (Instalador):** `TBX-Translator-Setup.exe`
-            - **Debian / Ubuntu:** `TBX-Translator-Debian-Ubuntu-amd64.deb`
-            - **Fedora:** `TBX-Translator-Fedora-x86_64.rpm`
-            - **Arch Linux:** `TBX-Translator-Arch-x86_64.pkg.tar.zst`
-            - **Linux portátil:** `TBX-Translator-x86_64.AppImage`
-
-            ### Apoie o projeto
-
-            [Ko-fi — samwns](https://ko-fi.com/samwns)
-
-            ### Licença
-
-            CC BY-NC-SA 4.0 — uso e redistribuição não comerciais, com atribuição.
-
-            **Full Changelog**: https://github.com/${{ github.repository }}/commits/${{ needs.prepare-release.outputs.tag_name }}
+          generate_release_notes: false
+          body_path: release-messages/release-body.md
           files: |
             release-artifacts/**/*.deb
             release-artifacts/**/*.rpm
@@ -130,3 +127,21 @@ jobs:
             release-artifacts/**/*.AppImage
             release-artifacts/**/*.zip
             release-artifacts/**/*.exe
+      - name: Upload generated messages
+        uses: actions/upload-artifact@v4
+        with:
+          name: TBX-Translator-release-messages
+          path: release-messages/*.md
+      - name: Publish update on Discord
+        if: env.DISCORD_WEBHOOK_URL != ''
+        run: |
+          if [[ -n "$DISCORD_MEMBER_ROLE_ID" ]]; then
+            MEMBER_MENTION="<@&${DISCORD_MEMBER_ROLE_ID}>" \
+              perl -0pi -e 's/\@Member/$ENV{MEMBER_MENTION}/g' release-messages/discord-update.md
+          fi
+          jq -Rs '{content: ., allowed_mentions: {parse: ["everyone", "roles"]}}' \
+            release-messages/discord-update.md > release-messages/discord-payload.json
+          curl --fail-with-body \
+            -H 'Content-Type: application/json' \
+            --data-binary @release-messages/discord-payload.json \
+            "$DISCORD_WEBHOOK_URL"

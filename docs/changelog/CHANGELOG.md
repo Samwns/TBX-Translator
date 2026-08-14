@@ -9,6 +9,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Adicionado
 
+- Geração automática das notas da release e da mensagem do Discord, com publicação opcional por webhook.
+- Atalhos compactos para o servidor do Discord e o Ko-fi na barra superior do aplicativo.
 - Ícones SVG para as ações da interface, eliminando quadrados causados por emojis e glifos ausentes na fonte.
 - Cantos arredondados e sombra na janela principal, preservando a barra de título personalizada e o fundo transparente.
 - Atualizador interno para Windows portátil/instalado, AppImage, Debian, Fedora e Arch, com changelog das Releases do GitHub, progresso, SHA-256 e reinício automático.
@@ -21,6 +23,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Alterado
 
+- README reorganizado, com downloads atuais, links da comunidade e versão dinâmica baseada na release mais recente.
+- As releases agora exibem primeiro o resumo das mudanças e depois os downloads.
 - Textos da interface em português foram refinados, incluindo botões de iniciar, voltar, salvar e navegar pelos logs.
 - O dicionário de termos padrão passa a traduzir `Back` como `Voltar` e `Home`/`Play` como `Iniciar` em português.
 - O ícone original de maleta foi restaurado e unificado na janela e nos pacotes Windows, AppImage e Linux nativo.
@@ -32,6 +36,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Corrigido
 
+- Scanner de fontes Ren'Py agora encontra fontes desempacotadas diretamente, evitando timeouts em diferentes versões do motor.
+- Abas Ren'Py, Unity e Godot do injetor de fontes agora exibem seus respectivos ícones.
 - Limpeza automática de diretórios temporários e scripts que ainda usavam o prefixo legado `tpg_`.
 - Captura indevida de textos das ferramentas internas de desenvolvimento do Ren'Py.
 - Preservação de BBCode, espaços e tags durante traduções Godot.
