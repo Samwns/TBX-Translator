@@ -144,7 +144,46 @@ impl TbxApp {
                     }
 
                     ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(RichText::new("v0.0.2-alpha | by samwns").color(Color32::from_rgb(108, 112, 134)).small());
+                        ui.vertical(|ui| {
+                            ui.with_layout(egui::Layout::right_to_left(Align::Min), |ui| {
+                                ui.label(
+                                    RichText::new(format!(
+                                        "v{} | by samwns",
+                                        crate::updater::current_version()
+                                    ))
+                                    .color(Color32::from_rgb(108, 112, 134))
+                                    .small(),
+                                );
+                            });
+                            if let Some(release) = self
+                                .update_release
+                                .as_ref()
+                                .filter(|release| crate::updater::is_newer(&release.tag_name))
+                            {
+                                ui.with_layout(egui::Layout::right_to_left(Align::Min), |ui| {
+                                    let message = format!(
+                                        "↑ {}: {}",
+                                        t("nova_versao_disponivel", lang),
+                                        release.tag_name
+                                    );
+                                    if ui
+                                        .add(
+                                            Label::new(
+                                                RichText::new(message)
+                                                    .color(Color32::from_rgb(166, 227, 161))
+                                                    .small()
+                                                    .strong(),
+                                            )
+                                            .sense(Sense::click()),
+                                        )
+                                        .on_hover_text(t("atualizacoes", lang))
+                                        .clicked()
+                                    {
+                                        self.current_tab = AppTab::Settings;
+                                    }
+                                });
+                            }
+                        });
                     });
                 });
             });

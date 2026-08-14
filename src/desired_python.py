@@ -3,19 +3,41 @@ init python:
         try:
             import os
             import io
+            try:
+                string_types = (basestring,)
+                text_type = unicode
+            except NameError:
+                string_types = (str,)
+                text_type = str
+
+            def as_text(value):
+                if isinstance(value, text_type):
+                    return value
+                try:
+                    return value.decode('utf-8', 'replace')
+                except Exception:
+                    try:
+                        return text_type(value)
+                    except Exception:
+                        return text_type(repr(value))
+
             path = os.path.join(config.basedir, 'game', 'tl', 'tbx_temp', 'dump.txt')
             try:
                 os.makedirs(os.path.dirname(path))
             except Exception:
                 pass
             with io.open(path, 'w', encoding='utf-8') as f:
+                def write_entry(filename, kind, value):
+                    value = as_text(value).replace('\n', '\\n').replace('\r', '')
+                    f.write(as_text(filename) + '|||' + as_text(kind) + '|||' + value + '\n')
+
                 def extract_strings_from_obj(obj, seen=None, depth=0):
                     if seen is None: seen = set()
                     if id(obj) in seen: return set()
                     seen.add(id(obj))
                     texts = set()
                     if depth > 5: return texts
-                    if isinstance(obj, str):
+                    if isinstance(obj, string_types):
                         clean_obj = obj.strip()
                         if len(clean_obj) > 1 and len(clean_obj) < 800:
                             if not clean_obj.startswith('#') and not clean_obj.startswith('gui/') and not clean_obj.startswith('http'):
@@ -26,7 +48,7 @@ init python:
                             texts.update(extract_strings_from_obj(item, seen, depth+1))
                     elif isinstance(obj, dict):
                         for k, v in obj.items():
-                            if isinstance(k, str) and len(k) > 1 and len(k) < 800: texts.add(k)
+                            if isinstance(k, string_types) and len(k) > 1 and len(k) < 800: texts.add(k)
                             texts.update(extract_strings_from_obj(v, seen, depth+1))
                     else:
                         if hasattr(obj, '__dict__'):
@@ -58,18 +80,18 @@ init python:
                         if isinstance(s, renpy.ast.Say):
                             text = s.what if s.what else ''
                             if text.strip():
-                                f.write(base_file + '|||dialogo|||' + text.replace('\n', '\\n').replace('\r', '') + '\n')
+                                write_entry(base_file, 'dialogo', text)
                         elif isinstance(s, renpy.ast.Menu):
                             for item in s.items:
                                 if item[0] and item[0].strip():
                                     try:
                                         val = renpy.python.py_eval(item[0])
-                                        if not isinstance(val, str): val = str(val)
+                                        if not isinstance(val, string_types): val = as_text(val)
                                     except:
                                         val = item[0]
                                         if val.startswith('"') and val.endswith('"'): val = val[1:-1]
                                         elif val.startswith("'") and val.endswith("'"): val = val[1:-1]
-                                    f.write(base_file + '|||menu|||' + val.replace('\n', '\\n').replace('\r', '') + '\n')
+                                    write_entry(base_file, 'menu', val)
                         elif isinstance(s, renpy.ast.Screen):
                             texts = extract_strings_from_obj(s.screen)
                             for txt in texts:
@@ -77,19 +99,19 @@ init python:
                                     clean = txt
                                     if clean.startswith('"') and clean.endswith('"'): clean = clean[1:-1]
                                     elif clean.startswith("'") and clean.endswith("'"): clean = clean[1:-1]
-                                    f.write(base_file + '|||interface|||' + clean.replace('\n', '\\n').replace('\r', '') + '\n')
+                                    write_entry(base_file, 'interface', clean)
                         elif isinstance(s, (renpy.ast.Show, renpy.ast.Scene)):
                             if hasattr(s, 'imspec') and s.imspec and s.imspec[0]:
                                 for part in s.imspec[0]:
-                                    if part != 'text' and isinstance(part, str) and part.strip():
-                                        f.write(base_file + '|||interface|||' + part.replace('\n', '\\n').replace('\r', '') + '\n')
+                                    if part != 'text' and isinstance(part, string_types) and part.strip():
+                                        write_entry(base_file, 'interface', part)
                         elif isinstance(s, renpy.ast.Python):
                             pass
                         else:
                             for attr in ('old', 'what', 'text', 'prompt'):
                                 val = getattr(s, attr, None)
-                                if isinstance(val, str) and val.strip():
-                                    f.write(base_file + '|||interface|||' + val.replace('\n', '\\n').replace('\r', '') + '\n')
+                                if isinstance(val, string_types) and val.strip():
+                                    write_entry(base_file, 'interface', val)
                     except:
                         pass
 
@@ -115,7 +137,7 @@ init python:
                     'Takes a screenshot.', 'Hides the interface.', 'Opens the accessibility menu.'
                 ]
                 for s in standard_ui:
-                    f.write('screens.rpy|||interface|||' + s + '\n')
+                    write_entry('screens.rpy', 'interface', s)
 
                 import re
                 for root, dirs, files in os.walk(os.path.join(config.basedir, 'game')):
@@ -129,7 +151,7 @@ init python:
                                     matches = re.findall(pat, content)
                                     for quote, match in matches:
                                         if match.strip():
-                                            f.write(file + '|||interface|||' + match.replace('\n', '\\n').replace('\r', '') + '\n')
+                                            write_entry(file, 'interface', match)
                             except:
                                 pass
 
@@ -139,8 +161,8 @@ init python:
                 # already collected from their AST nodes above.
         except Exception as e:
             import traceback
-            with open(os.path.join(config.basedir, 'game', 'error.log'), 'w') as err:
-                err.write(traceback.format_exc())
+            with io.open(os.path.join(config.basedir, 'game', 'error.log'), 'w', encoding='utf-8') as err:
+                err.write(as_text(traceback.format_exc()))
         finally:
             import sys
             sys.exit(0)

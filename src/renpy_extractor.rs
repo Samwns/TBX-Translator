@@ -63,6 +63,13 @@ fn integrate_language_menu(
         regex::escape(language_id)
     ))
     .map_err(|error| error.to_string())?;
+    let change_language_call = Regex::new(&format!(
+        r#"change_language\s*\(\s*["']{}["']"#,
+        regex::escape(language_id)
+    ))
+    .map_err(|error| error.to_string())?;
+    let any_change_language_call = Regex::new(r"renpy\s*\.\s*change_language\s*\(")
+        .map_err(|error| error.to_string())?;
     let mut patched_menus = 0usize;
     let mut dynamic_menu_found = false;
 
@@ -89,7 +96,10 @@ fn integrate_language_menu(
             dynamic_menu_found = true;
             continue;
         }
-        if content.contains(&marker) || language_call.is_match(&content) {
+        if content.contains(&marker)
+            || language_call.is_match(&content)
+            || change_language_call.is_match(&content)
+        {
             patched_menus += 1;
             continue;
         }
@@ -129,35 +139,92 @@ fn integrate_language_menu(
                 language_buttons.push((index, end, indent));
             }
         }
-        if language_buttons.is_empty() {
-            continue;
-        }
-
-        let mut group_ends: Vec<(usize, String)> = Vec::new();
+        let mut insertions: Vec<(usize, String)> = Vec::new();
         for (position, (_, end, indent)) in language_buttons.iter().enumerate() {
             let next_is_same_group = language_buttons.get(position + 1).is_some_and(|next| {
                 next.0 <= *end + 2 && next.2.as_str() == indent.as_str()
             });
             if !next_is_same_group {
-                group_ends.push((*end, indent.clone()));
+                insertions.push((
+                    *end,
+                    format!(
+                        "{indent}{marker}{newline}{indent}textbutton \"{}\" action Language(\"{}\"){newline}",
+                        escape_renpy(language_label),
+                        escape_renpy(language_id)
+                    ),
+                ));
             }
         }
 
-        let mut rewritten = String::with_capacity(content.len() + group_ends.len() * 120);
+        // Some games implement their language selector as a regular Ren'Py
+        // `menu` whose choices call `renpy.change_language(...)`. Find each
+        // choice block and append the new language to the same group.
+        let mut language_choices: Vec<(usize, usize, String)> = Vec::new();
+        for (action_index, action_line) in lines.iter().enumerate() {
+            if !any_change_language_call.is_match(action_line) {
+                continue;
+            }
+            let action_trimmed = action_line.trim_start();
+            let action_indent = action_line.len() - action_trimmed.len();
+            for choice_index in (0..action_index).rev() {
+                let choice_line = lines[choice_index];
+                let choice_trimmed = choice_line.trim_start();
+                if choice_trimmed.is_empty() {
+                    continue;
+                }
+                let choice_indent_len = choice_line.len() - choice_trimmed.len();
+                if choice_indent_len >= action_indent {
+                    continue;
+                }
+                if choice_trimmed.ends_with(':')
+                    && (choice_trimmed.starts_with('"') || choice_trimmed.starts_with('\''))
+                {
+                    let mut end = choice_index;
+                    for (next_index, next_line) in lines.iter().enumerate().skip(choice_index + 1) {
+                        let next_trimmed = next_line.trim_start();
+                        let next_indent = next_line.len() - next_trimmed.len();
+                        if !next_trimmed.is_empty() && next_indent <= choice_indent_len {
+                            break;
+                        }
+                        end = next_index;
+                    }
+                    language_choices.push((
+                        choice_index,
+                        end,
+                        choice_line[..choice_indent_len].to_string(),
+                    ));
+                }
+                break;
+            }
+        }
+        language_choices.sort_by_key(|choice| choice.0);
+        language_choices.dedup_by_key(|choice| choice.0);
+        for (position, (_, end, indent)) in language_choices.iter().enumerate() {
+            let next_is_same_group = language_choices.get(position + 1).is_some_and(|next| {
+                next.0 <= *end + 2 && next.2.as_str() == indent.as_str()
+            });
+            if !next_is_same_group {
+                insertions.push((
+                    *end,
+                    format!(
+                        "{indent}{marker}{newline}{indent}\"{}\":{newline}{indent}    $ renpy.change_language(\"{}\"){newline}",
+                        escape_renpy(language_label),
+                        escape_renpy(language_id)
+                    ),
+                ));
+            }
+        }
+
+        if insertions.is_empty() {
+            continue;
+        }
+
+        let mut rewritten = String::with_capacity(content.len() + insertions.len() * 160);
         for (index, line) in lines.iter().enumerate() {
             rewritten.push_str(line);
             rewritten.push_str(newline);
-            if let Some((_, indent)) = group_ends.iter().find(|(end, _)| *end == index) {
-                rewritten.push_str(indent);
-                rewritten.push_str(&marker);
-                rewritten.push_str(newline);
-                rewritten.push_str(indent);
-                rewritten.push_str(&format!(
-                    "textbutton \"{}\" action Language(\"{}\")",
-                    escape_renpy(language_label),
-                    escape_renpy(language_id)
-                ));
-                rewritten.push_str(newline);
+            for (_, snippet) in insertions.iter().filter(|(end, _)| *end == index) {
+                rewritten.push_str(snippet);
                 patched_menus += 1;
             }
         }
@@ -688,6 +755,32 @@ mod tests {
         assert_eq!(second, (1, false));
         assert_eq!(content.matches("TBX_LANGUAGE_OPTION:portuguese").count(), 1);
         assert!(screen.with_file_name("screens.rpy.tbx_backup").exists());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn test_change_language_menu_is_extended_once() {
+        let directory = std::env::temp_dir().join(format!(
+            "tbx-renpy-change-language-menu-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let script = directory.join("Initial.rpy");
+        fs::write(
+            &script,
+            "label splashscreen:\n    menu:\n        \"English\":\n            $ renpy.change_language(\"English\")\n\n        \"Español (Default)\":\n            $ renpy.change_language(None)\n\n        \"ukrainian\":\n            $ renpy.change_language(\"ukrainian\")\n\n    return\n",
+        )
+        .unwrap();
+
+        let first = integrate_language_menu(&directory, "portuguese", "Portuguese").unwrap();
+        let second = integrate_language_menu(&directory, "portuguese", "Portuguese").unwrap();
+        let content = fs::read_to_string(&script).unwrap();
+        assert_eq!(first, (1, false));
+        assert_eq!(second, (1, false));
+        assert_eq!(content.matches("TBX_LANGUAGE_OPTION:portuguese").count(), 1);
+        assert!(content.contains("$ renpy.change_language(\"portuguese\")"));
+        assert!(script.with_file_name("Initial.rpy.tbx_backup").exists());
         let _ = fs::remove_dir_all(directory);
     }
 }

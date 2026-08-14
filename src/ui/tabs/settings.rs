@@ -4,12 +4,15 @@ use egui::*;
 use crate::ui::toggle_ui;
 
 impl TbxApp {
-    fn check_for_updates(&mut self) {
+    pub(crate) fn check_for_updates(&mut self, silent: bool) {
         if self.update_checking || self.update_downloading {
             return;
         }
         self.update_checking = true;
-        self.update_status = t("buscando_atualizacoes", &self.config.ui_language);
+        self.update_check_silent = silent;
+        if !silent {
+            self.update_status = t("buscando_atualizacoes", &self.config.ui_language);
+        }
         self.update_progress = (0, 0);
         let tx = self.tx.clone();
         tokio::spawn(async move {
@@ -133,7 +136,7 @@ impl TbxApp {
                     )
                     .clicked()
                 {
-                    self.check_for_updates();
+                    self.check_for_updates(false);
                 }
             });
 

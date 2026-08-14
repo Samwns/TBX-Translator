@@ -139,6 +139,7 @@ pub struct TbxApp {
     // Application updater
     pub update_release: Option<crate::updater::ReleaseInfo>,
     pub update_checking: bool,
+    pub update_check_silent: bool,
     pub update_downloading: bool,
     pub update_status: String,
     pub update_progress: (u64, u64),
@@ -205,12 +206,14 @@ impl TbxApp {
             godot_native_locales: Vec::new(),
             update_release: None,
             update_checking: false,
+            update_check_silent: false,
             update_downloading: false,
             update_status: String::new(),
             update_progress: (0, 0),
         };
 
         app.detect_game_type();
+        app.check_for_updates(true);
         app
     }
 
@@ -365,6 +368,7 @@ impl TbxApp {
                 }
                 UiMsg::UpdateFound(release) => {
                     self.update_checking = false;
+                    self.update_check_silent = false;
                     if crate::updater::is_newer(&release.tag_name) {
                         self.update_status = format!(
                             "{}: {}",
@@ -387,10 +391,16 @@ impl TbxApp {
                     self.update_progress = (done, total);
                 }
                 UiMsg::UpdateError(error) => {
+                    let silent = self.update_check_silent;
                     self.update_checking = false;
+                    self.update_check_silent = false;
                     self.update_downloading = false;
-                    self.update_status = error.clone();
-                    self.show_alert_modal = Some((true, "Atualização".to_string(), error));
+                    if silent {
+                        self.update_status.clear();
+                    } else {
+                        self.update_status = error.clone();
+                        self.show_alert_modal = Some((true, "Atualização".to_string(), error));
+                    }
                 }
             }
             ctx.request_repaint();
