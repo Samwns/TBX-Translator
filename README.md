@@ -25,6 +25,7 @@
 - Preservation of variables, tags, BBCode, whitespace, and formatting.
 - Independent engine tasks with cache, controlled concurrency, and cancellation.
 - In-app updates and an interface available in 104 languages.
+- Planned support for more formats, including RPG Maker, Wolf RPG Editor, Unreal Engine, and others.
 
 ## Download
 

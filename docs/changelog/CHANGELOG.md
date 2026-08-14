@@ -39,6 +39,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Corrigido
 
+- Troca de idioma do site agora atualiza também os downloads dinâmicos e remove o estado anterior da tradução automática.
+- Consulta da release mais recente no site passou a ignorar cache, mantendo versão e arquivos sincronizados com o GitHub.
 - Scanner de fontes Ren'Py agora encontra fontes desempacotadas diretamente, evitando timeouts em diferentes versões do motor.
 - Abas Ren'Py, Unity e Godot do injetor de fontes agora exibem seus respectivos ícones.
 - Limpeza automática de diretórios temporários e scripts que ainda usavam o prefixo legado `tpg_`.

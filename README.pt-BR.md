@@ -25,6 +25,7 @@
 - Proteção de variáveis, tags, BBCode, espaços e formatação.
 - Traduções independentes por engine, cache, concorrência controlada e cancelamento.
 - Atualização pelo aplicativo e interface disponível em 104 idiomas.
+- Suporte futuro planejado para mais formatos, incluindo RPG Maker, Wolf RPG Editor, Unreal Engine e outros.
 
 ## Baixar
 
