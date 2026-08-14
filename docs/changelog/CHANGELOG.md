@@ -12,7 +12,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Site oficial responsivo no GitHub Pages, com downloads diretos da release mais recente, documentação integrada e seleção de idioma.
 - Atalhos para o site oficial e para as releases do GitHub na barra superior do aplicativo.
 - Geração automática das notas da release e da mensagem do Discord, com publicação opcional por webhook.
-- Atalhos compactos para o servidor do Discord e o Ko-fi na barra superior do aplicativo.
+- Atalhos compactos e separados para o Discord e o Ko-fi no canto inferior direito.
+- Tela de novidades aberta automaticamente uma única vez depois de cada atualização, com confirmação persistente por versão.
 - Ícones SVG para as ações da interface, eliminando quadrados causados por emojis e glifos ausentes na fonte.
 - Cantos arredondados e sombra na janela principal, preservando a barra de título personalizada e o fundo transparente.
 - Atualizador interno para Windows portátil/instalado, AppImage, Debian, Fedora e Arch, com changelog das Releases do GitHub, progresso, SHA-256 e reinício automático.
@@ -36,6 +37,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Variáveis, interpolações e tags Ren'Py são removidas da carga enviada à API e recolocadas nas posições originais.
 - Os 104 idiomas da interface foram completados com as mensagens da central de atualizações e dos efeitos sonoros.
 - O número do build das GitHub Actions agora é incorporado ao executável.
+- O seletor de engines agora usa pílulas independentes, maiores, espaçadas e animadas, sem alterar o fluxo de tradução existente.
 
 ### Corrigido
 

@@ -24,6 +24,8 @@ pub struct AppConfig {
     pub threads_ativas: u32,
     pub efeitos_sonoros: bool,
     pub ui_language: String, // "pt_BR" or "en_US"
+    /// Versão cujo changelog inicial o usuário já confirmou.
+    pub ultima_versao_exibida: String,
     /// Estratégia usada ao instalar traduções em jogos Godot exportados.
     pub godot_injection_mode: String, // "auto", "force_slot" ou "direct_patch"
     /// Idioma nativo que será reutilizado no modo force_slot (ex.: "en").
@@ -48,6 +50,7 @@ impl Default for AppConfig {
             threads_ativas: 3,
             efeitos_sonoros: true,
             ui_language: "pt_BR".into(),
+            ultima_versao_exibida: String::new(),
             godot_injection_mode: "auto".into(),
             godot_force_locale: "en".into(),
         }
@@ -94,6 +97,7 @@ impl AppConfig {
         if let Some(v) = props.get("threadsAtivas")                    { cfg.threads_ativas = v.parse::<u32>().unwrap_or(3).clamp(1, 4); }
         if let Some(v) = props.get("efeitosSonoros")                   { cfg.efeitos_sonoros = v != "false"; }
         if let Some(v) = props.get("uiLanguage")                       { cfg.ui_language = v.clone(); }
+        if let Some(v) = props.get("ultimaVersaoExibida")              { cfg.ultima_versao_exibida = v.clone(); }
         if let Some(v) = props.get("godotInjectionMode")               { cfg.godot_injection_mode = v.clone(); }
         if let Some(v) = props.get("godotForceLocale")                  { cfg.godot_force_locale = v.clone(); }
 
@@ -125,6 +129,7 @@ impl AppConfig {
         let _ = writeln!(file, "threadsAtivas={}", self.threads_ativas);
         let _ = writeln!(file, "efeitosSonoros={}", self.efeitos_sonoros);
         let _ = writeln!(file, "uiLanguage={}", self.ui_language);
+        let _ = writeln!(file, "ultimaVersaoExibida={}", self.ultima_versao_exibida);
         let _ = writeln!(file, "godotInjectionMode={}", self.godot_injection_mode);
         let _ = writeln!(file, "godotForceLocale={}", self.godot_force_locale);
     }

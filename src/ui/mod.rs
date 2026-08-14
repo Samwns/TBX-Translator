@@ -23,6 +23,8 @@ use crate::editor_ui::EditorState;
 use crate::font_injector::FontInjectorState;
 use crate::i18n::t;
 
+const BUILTIN_UPDATE_SUMMARY: &str = include_str!("../../docs/releases/UPDATE_SUMMARY.md");
+
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum AppTab {
     Translate,
@@ -128,6 +130,8 @@ pub struct TbxApp {
     pub show_cancel_modal: bool,
     pub engine_modal_tab: usize, // 0 = RenPy, 1 = Unity
     pub show_alert_modal: Option<(bool, String, String)>, // (is_error, title, message)
+    pub show_post_update_changelog: bool,
+    pub post_update_changelog: String,
 
     // Cached languages
     pub source_languages: Vec<&'static str>,
@@ -153,6 +157,8 @@ impl TbxApp {
         setup_custom_styles(&cc.egui_ctx);
 
         let config = AppConfig::carregar();
+        let show_post_update_changelog =
+            config.ultima_versao_exibida != crate::updater::current_version();
         let (tx, rx) = channel();
 
         let initial_engine = if config.modo_jogo == "unity" {
@@ -199,6 +205,8 @@ impl TbxApp {
             show_cancel_modal: false,
             engine_modal_tab: 0,
             show_alert_modal: None,
+            show_post_update_changelog,
+            post_update_changelog: BUILTIN_UPDATE_SUMMARY.trim().to_string(),
             source_languages: {
                 let mut langs = vec!["Detectar Automaticamente"];
                 langs.extend_from_slice(crate::api::ALL_LANGUAGES);
@@ -400,6 +408,11 @@ impl TbxApp {
                             t("versao_mais_recente", &self.config.ui_language),
                             crate::updater::current_version()
                         );
+                    }
+                    if release.tag_name.trim_start_matches('v') == crate::updater::current_version()
+                        && !release.body.trim().is_empty()
+                    {
+                        self.post_update_changelog = release.body.clone();
                     }
                     self.update_release = Some(release);
                 }
@@ -853,6 +866,15 @@ impl eframe::App for TbxApp {
                         self.render_modals(ctx);
                     });
             });
+
+        if !self.show_post_update_changelog
+            && !self.show_overwrite_modal
+            && !self.show_engine_modal
+            && !self.show_cancel_modal
+            && self.show_alert_modal.is_none()
+        {
+            self.render_social_shortcuts(ctx);
+        }
 
         let interactive_click = ctx.output(|output| {
             output.events.iter().any(|event| {

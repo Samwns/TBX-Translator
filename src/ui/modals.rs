@@ -5,6 +5,68 @@ use crate::ui::toggle_ui;
 
 impl TbxApp {
     pub fn render_modals(&mut self, ctx: &Context) {
+        // Exibido uma única vez depois que a versão instalada muda.
+        if self.show_post_update_changelog {
+            let lang = self.config.ui_language.clone();
+            let version = crate::updater::current_version();
+            let changelog = self.post_update_changelog.clone();
+            let mut acknowledged = false;
+
+            egui::Window::new(t("central_atualizacoes", &lang))
+                .id(egui::Id::new("post_update_changelog"))
+                .collapsible(false)
+                .resizable(true)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .default_pos(ctx.screen_rect().center())
+                .default_width(560.0)
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::Image::new(egui::include_image!(
+                                "../../assets/update_icon.svg"
+                            ))
+                            .max_size(vec2(30.0, 30.0)),
+                        );
+                        ui.vertical(|ui| {
+                            ui.label(
+                                RichText::new(t("central_atualizacoes", &lang))
+                                    .size(20.0)
+                                    .strong()
+                                    .color(Color32::from_rgb(249, 226, 175)),
+                            );
+                            ui.label(
+                                RichText::new(format!("TBX Translator v{version}"))
+                                    .color(Color32::from_rgb(166, 173, 200)),
+                            );
+                        });
+                    });
+                    ui.add_space(10.0);
+                    ui.separator();
+                    ScrollArea::vertical().max_height(350.0).show(ui, |ui| {
+                        ui.label(RichText::new(changelog).size(14.0));
+                    });
+                    ui.separator();
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if ui
+                            .add(
+                                Button::new(RichText::new("OK").strong())
+                                    .fill(Color32::from_rgb(166, 227, 161))
+                                    .min_size(vec2(92.0, 32.0)),
+                            )
+                            .clicked()
+                        {
+                            acknowledged = true;
+                        }
+                    });
+                });
+
+            if acknowledged {
+                self.show_post_update_changelog = false;
+                self.config.ultima_versao_exibida = version;
+                self.config.salvar();
+            }
+        }
+
         // 1. Overwrite Dialog Modal
         if self.show_overwrite_modal {
             egui::Window::new("Pasta de Tradução Já Existe")

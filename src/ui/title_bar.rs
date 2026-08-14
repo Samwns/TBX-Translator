@@ -204,65 +204,72 @@ impl TbxApp {
                             self.current_tab = AppTab::Updates;
                         }
 
-                        let website = ui
-                            .add(
-                                Button::image(
-                                    egui::Image::new(egui::include_image!(
-                                        "../../assets/website_icon.svg"
-                                    ))
-                                    .max_size(vec2(15.0, 15.0)),
-                                )
-                                .fill(Color32::from_rgb(36, 36, 52))
-                                .rounding(Rounding::same(5.0))
-                                .min_size(vec2(27.0, 27.0)),
-                            )
-                            .on_hover_text("Abrir o site do TBX Translator");
-                        if website.clicked() {
-                            ctx.open_url(egui::OpenUrl::new_tab(
-                                "https://samwns.github.io/TBX-Translator/",
-                            ));
-                        }
-
-                        let releases = ui
-                            .add(
-                                Button::image(
-                                    egui::Image::new(egui::include_image!(
-                                        "../../assets/github_icon.svg"
-                                    ))
-                                    .max_size(vec2(15.0, 15.0)),
-                                )
-                                .fill(Color32::from_rgb(36, 36, 52))
-                                .rounding(Rounding::same(5.0))
-                                .min_size(vec2(27.0, 27.0)),
-                            )
-                            .on_hover_text("Abrir releases no GitHub");
-                        if releases.clicked() {
-                            ctx.open_url(egui::OpenUrl::new_tab(
-                                "https://github.com/Samwns/TBX-Translator/releases/latest",
-                            ));
-                        }
-
-                        let kofi = ui
-                            .add(
-                                Button::image(
-                                    egui::Image::new(egui::include_image!(
-                                        "../../assets/kofi_icon.svg"
-                                    ))
-                                    .max_size(vec2(15.0, 15.0)),
-                                )
-                                .fill(Color32::from_rgb(36, 36, 52))
-                                .rounding(Rounding::same(5.0))
-                                .min_size(vec2(27.0, 27.0)),
-                            )
-                            .on_hover_text("Apoiar o projeto no Ko-fi");
-                        if kofi.clicked() {
-                            ctx.open_url(egui::OpenUrl::new_tab("https://ko-fi.com/samwns"));
-                        }
                     });
                 });
             });
 
         ui.separator();
+    }
+
+    /// Mantém os atalhos da comunidade fora da navegação principal.
+    pub fn render_social_shortcuts(&mut self, ctx: &Context) {
+        egui::Area::new(Id::new("social_shortcuts"))
+            .anchor(Align2::RIGHT_BOTTOM, vec2(-28.0, -26.0))
+            .order(Order::Middle)
+            .show(ctx, |ui| {
+                Frame::none()
+                    .fill(Color32::from_rgba_unmultiplied(24, 24, 37, 235))
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(69, 71, 90)))
+                    .rounding(Rounding::same(10.0))
+                    .inner_margin(Margin::same(6.0))
+                    .shadow(egui::epaint::Shadow {
+                        offset: vec2(0.0, 3.0),
+                        blur: 10.0,
+                        spread: 0.0,
+                        color: Color32::from_black_alpha(110),
+                    })
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            let discord = ui
+                                .add(
+                                    Button::image(
+                                        egui::Image::new(egui::include_image!(
+                                            "../../assets/discord_icon.svg"
+                                        ))
+                                        .max_size(vec2(17.0, 17.0)),
+                                    )
+                                    .fill(Color32::from_rgb(36, 36, 52))
+                                    .rounding(Rounding::same(7.0))
+                                    .min_size(vec2(30.0, 30.0)),
+                                )
+                                .on_hover_text("Entrar no Discord");
+                            if discord.clicked() {
+                                ctx.open_url(egui::OpenUrl::new_tab(
+                                    "https://discord.gg/xsxhvWgWBz",
+                                ));
+                            }
+
+                            ui.add_space(8.0);
+
+                            let kofi = ui
+                                .add(
+                                    Button::image(
+                                        egui::Image::new(egui::include_image!(
+                                            "../../assets/kofi_icon.svg"
+                                        ))
+                                        .max_size(vec2(17.0, 17.0)),
+                                    )
+                                    .fill(Color32::from_rgb(36, 36, 52))
+                                    .rounding(Rounding::same(7.0))
+                                    .min_size(vec2(30.0, 30.0)),
+                                )
+                                .on_hover_text("Apoiar no Ko-fi");
+                            if kofi.clicked() {
+                                ctx.open_url(egui::OpenUrl::new_tab("https://ko-fi.com/samwns"));
+                            }
+                        });
+                    });
+            });
     }
 
 

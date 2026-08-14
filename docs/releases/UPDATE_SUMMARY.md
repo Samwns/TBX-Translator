@@ -3,6 +3,7 @@
 - Tratamento de strings aprimorado para preservar tags, variáveis, BBCode, espaços e formatação.
 - Traduções independentes por engine, com concorrência controlada, cache, cancelamento e logs separados.
 - Central de atualizações com changelog, download, instalação e reinício do aplicativo.
-- Interface renovada com ícones SVG, sons, notificações, cantos arredondados e suporte a 104 idiomas.
+- Interface renovada com seletor de engines em pílulas, atalhos sociais reposicionados, ícones SVG, sons, notificações e cantos arredondados.
+- Tela de novidades exibida uma única vez após cada atualização do aplicativo.
 - Scanner de fontes Ren'Py mais rápido, com detecção direta e compatibilidade ampliada entre versões do motor.
 - Novo site responsivo com downloads diretos, documentação integrada e suporte multilíngue.

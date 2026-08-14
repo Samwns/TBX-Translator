@@ -32,24 +32,38 @@ fn pick_game_file() -> Result<Option<PathBuf>, String> {
 }
 
 impl TbxApp {
-    pub fn render_translate_tab(&mut self, ui: &mut Ui, _ctx: &Context) {
+    pub fn render_translate_tab(&mut self, ui: &mut Ui, ctx: &Context) {
         let lang = &self.config.ui_language.clone();
 
-        // 1. Engine Selector Pill Tabs
+        // 1. Engine selector: independent floating pills, detached from the top tabs.
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Motor:").color(Color32::from_rgb(166, 173, 200)).strong());
+            ui.spacing_mut().item_spacing.x = 14.0;
 
             let renpy_active = self.engine_mode == 0;
             let unity_active = self.engine_mode == 1;
+            let godot_active = self.engine_mode == 2;
+            let engine_selector_id = ui.id();
+
+            let animated_fill = |id: &str, active: bool, selected: Color32| {
+                let amount = ctx.animate_bool_with_time(engine_selector_id.with(id), active, 0.18);
+                let idle = Color32::from_rgb(49, 50, 68);
+                Color32::from_rgb(
+                    egui::lerp(idle.r() as f32..=selected.r() as f32, amount) as u8,
+                    egui::lerp(idle.g() as f32..=selected.g() as f32, amount) as u8,
+                    egui::lerp(idle.b() as f32..=selected.b() as f32, amount) as u8,
+                )
+            };
 
             let renpy_btn = Button::image_and_text(
-                egui::Image::new(egui::include_image!("../../../assets/renpy_icon.svg")).max_height(14.0),
-                RichText::new("Ren'Py Engine")
+                egui::Image::new(egui::include_image!("../../../assets/renpy_icon.svg")).max_height(18.0),
+                RichText::new("Ren'Py")
                     .color(if renpy_active { Color32::from_rgb(17, 17, 27) } else { Color32::from_rgb(205, 214, 244) })
                     .strong(),
             )
-            .fill(if renpy_active { Color32::from_rgb(249, 226, 175) } else { Color32::from_rgb(49, 50, 68) })
-            .rounding(Rounding::same(6.0));
+            .fill(animated_fill("renpy_engine_pill", renpy_active, Color32::from_rgb(249, 226, 175)))
+            .stroke(Stroke::new(1.0, if renpy_active { Color32::from_rgb(249, 226, 175) } else { Color32::from_rgb(69, 71, 90) }))
+            .rounding(Rounding::same(14.0))
+            .min_size(vec2(132.0, 40.0));
 
             if ui.add(renpy_btn).clicked() {
                 self.engine_mode = 0;
@@ -58,16 +72,16 @@ impl TbxApp {
                 self.detect_game_type();
             }
 
-            ui.add_space(8.0); // Espaçamento adicionado aqui!
-
             let unity_btn = Button::image_and_text(
-                egui::Image::new(egui::include_image!("../../../assets/unity_icon.svg")).max_height(14.0),
-                RichText::new("Unity Engine")
+                egui::Image::new(egui::include_image!("../../../assets/unity_icon.svg")).max_height(18.0),
+                RichText::new("Unity")
                     .color(if unity_active { Color32::from_rgb(17, 17, 27) } else { Color32::from_rgb(205, 214, 244) })
                     .strong(),
             )
-            .fill(if unity_active { Color32::from_rgb(137, 180, 250) } else { Color32::from_rgb(49, 50, 68) })
-            .rounding(Rounding::same(6.0));
+            .fill(animated_fill("unity_engine_pill", unity_active, Color32::from_rgb(137, 180, 250)))
+            .stroke(Stroke::new(1.0, if unity_active { Color32::from_rgb(137, 180, 250) } else { Color32::from_rgb(69, 71, 90) }))
+            .rounding(Rounding::same(14.0))
+            .min_size(vec2(132.0, 40.0));
 
             if ui.add(unity_btn).clicked() {
                 self.engine_mode = 1;
@@ -75,17 +89,16 @@ impl TbxApp {
                 self.game_path = self.config.caminho_jogo_unity.clone();
                 self.detect_game_type();
             }
-            ui.add_space(8.0); // Espaçamento adicionado aqui!
-
-            let godot_active = self.engine_mode == 2;
             let godot_btn = Button::image_and_text(
-                egui::Image::new(egui::include_image!("../../../assets/godot_icon.svg")).max_height(14.0),
-                RichText::new("Godot Engine")
+                egui::Image::new(egui::include_image!("../../../assets/godot_icon.svg")).max_height(18.0),
+                RichText::new("Godot")
                     .color(if godot_active { Color32::from_rgb(17, 17, 27) } else { Color32::from_rgb(205, 214, 244) })
                     .strong(),
             )
-            .fill(if godot_active { Color32::from_rgb(166, 227, 161) } else { Color32::from_rgb(49, 50, 68) }) // Green for Godot
-            .rounding(Rounding::same(6.0));
+            .fill(animated_fill("godot_engine_pill", godot_active, Color32::from_rgb(166, 227, 161)))
+            .stroke(Stroke::new(1.0, if godot_active { Color32::from_rgb(166, 227, 161) } else { Color32::from_rgb(69, 71, 90) }))
+            .rounding(Rounding::same(14.0))
+            .min_size(vec2(132.0, 40.0));
 
             if ui.add(godot_btn).clicked() {
                 self.engine_mode = 2;
