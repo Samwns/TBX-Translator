@@ -30,6 +30,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Alterado
 
+- O script de notas de lançamento (GitHub Actions) agora extrai o histórico de novidades diretamente e de forma dinâmica do `CHANGELOG.md`, resolvendo a repetição de versões passadas.
+- Toggles e botões de interface passam a respeitar dinamicamente a cor de destaque (`accent`) do tema visual ativo, substituindo o verde fixo.
 - README principal agora usa inglês por padrão e mantém uma versão completa em português brasileiro.
 - README reorganizado, com downloads atuais, links da comunidade e versão dinâmica baseada na release mais recente.
 - As releases agora exibem primeiro o resumo das mudanças e depois os downloads.
