@@ -828,25 +828,35 @@ impl eframe::App for TbxApp {
         self.check_incoming_messages(ctx);
         let theme = crate::themes::AppTheme::get(&self.config.theme_id);
 
+        let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+        let outer_margin = if is_maximized { 0.0 } else { 12.0 };
+        let outer_rounding = if is_maximized { 0.0 } else { 12.0 };
+        let outer_shadow = if is_maximized {
+            egui::epaint::Shadow::NONE
+        } else {
+            egui::epaint::Shadow {
+                offset: egui::vec2(0.0, 4.0),
+                blur: 18.0,
+                spread: 1.0,
+                color: Color32::from_black_alpha(150),
+            }
+        };
+        let outer_stroke = if is_maximized { Stroke::NONE } else { Stroke::new(1.0, theme.border) };
+
         // Custom frameless window root container
         egui::CentralPanel::default()
             .frame(
                 Frame::none()
                     .fill(Color32::TRANSPARENT)
-                    .inner_margin(Margin::same(12.0)),
+                    .inner_margin(Margin::same(outer_margin)),
             )
             .show(ctx, |ui| {
                 // Wrapper frame for the actual app content
                 Frame::none()
                     .fill(theme.base)
-                    .rounding(Rounding::same(12.0))
-                    .stroke(Stroke::new(1.0, theme.border))
-                    .shadow(egui::epaint::Shadow {
-                        offset: egui::vec2(0.0, 4.0),
-                        blur: 18.0,
-                        spread: 1.0,
-                        color: Color32::from_black_alpha(150),
-                    })
+                    .rounding(Rounding::same(outer_rounding))
+                    .stroke(outer_stroke)
+                    .shadow(outer_shadow)
                     .show(ui, |ui| {
                         ui.set_min_size(ui.available_size());
                         self.render_custom_title_bar(ui, ctx);
@@ -859,8 +869,8 @@ impl eframe::App for TbxApp {
                             .rounding(Rounding {
                                 nw: 0.0,
                                 ne: 0.0,
-                                sw: 12.0,
-                                se: 12.0,
+                                sw: outer_rounding,
+                                se: outer_rounding,
                             })
                             .show(ui, |ui| {
                                 // Tab content (top-down, normal layout)

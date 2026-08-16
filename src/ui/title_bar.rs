@@ -14,11 +14,14 @@ impl TbxApp {
             Color32::from_rgb(166, 227, 161) // Godot Green
         };
 
+        let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+        let top_rounding = if is_maximized { 0.0 } else { 12.0 };
+
         Frame::none()
             .fill(bar_color)
             .rounding(Rounding {
-                nw: 12.0,
-                ne: 12.0,
+                nw: top_rounding,
+                ne: top_rounding,
                 sw: 0.0,
                 se: 0.0,
             })
@@ -58,6 +61,22 @@ impl TbxApp {
                                 self.config.efeitos_sonoros,
                             );
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+
+                        let (max_rect, max_resp) = ui.allocate_exact_size(vec2(24.0, 24.0), Sense::click());
+                        if max_resp.hovered() {
+                            ui.painter().rect_filled(max_rect, Rounding::same(4.0), Color32::from_rgba_unmultiplied(166, 173, 200, 60));
+                        }
+                        let max_color = if max_resp.hovered() { Color32::WHITE } else { theme.overlay0 };
+                        let is_maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
+                        let max_icon = if is_maximized { "❐" } else { "☐" };
+                        ui.painter().text(max_rect.center(), Align2::CENTER_CENTER, max_icon, FontId::proportional(14.0), max_color);
+                        if max_resp.clicked() {
+                            crate::sound::play(
+                                crate::sound::AppSound::Click,
+                                self.config.efeitos_sonoros,
+                            );
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
                         }
 
                         let (min_rect, min_resp) = ui.allocate_exact_size(vec2(24.0, 24.0), Sense::click());
