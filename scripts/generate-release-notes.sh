@@ -10,7 +10,19 @@ PREVIOUS_TAG="${3:-}"
 OUTPUT_DIR="${4:-$PROJECT_DIR/release/messages}"
 TAG_NAME="v${VERSION}-build-${BUILD_NUMBER}"
 RELEASE_NAME="TBX Translator v${VERSION} (build ${BUILD_NUMBER})"
-SUMMARY_FILE="$PROJECT_DIR/docs/releases/UPDATE_SUMMARY.md"
+CHANGELOG_FILE="$PROJECT_DIR/docs/changelog/CHANGELOG.md"
+
+extract_changelog() {
+    awk -v ver="${VERSION}" '
+      $0 ~ "^## \\\[" ver "\\\]" { found=1; next }
+      /^## \[/ { if(found) exit }
+      found {
+        if (!started && $0 ~ /^$/) next;
+        started=1;
+        print
+      }
+    ' "$CHANGELOG_FILE"
+}
 
 if [[ -z "$PREVIOUS_TAG" ]] && git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
     PREVIOUS_TAG="$(git -C "$PROJECT_DIR" tag --list "v${VERSION}-build-*" --sort=-v:refname | head -n 1)"
@@ -40,7 +52,7 @@ EOF
 {
     printf '## %s\n\n' "$RELEASE_NAME"
     printf '### Resumo das mudanças\n\n'
-    cat "$SUMMARY_FILE"
+    extract_changelog
     printf '\n\n'
     write_downloads
     cat <<'EOF'
@@ -62,7 +74,7 @@ EOF
     printf '# [**%s**](https://github.com/Samwns/TBX-Translator/releases/latest)\n\n' "$RELEASE_NAME"
     printf 'update/changes:\n'
     printf '### Resumo das mudanças\n\n'
-    cat "$SUMMARY_FILE"
+    extract_changelog
     printf '\n\n@Member @here\n'
 } > "$OUTPUT_DIR/discord-update.md"
 

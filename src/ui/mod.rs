@@ -80,9 +80,9 @@ pub fn toggle_ui(ui: &mut egui::Ui, on: &mut bool, text: &str) -> egui::Response
             let radius = 0.5 * rect.height();
 
             let bg_color = if *on {
-                Color32::from_rgb(166, 227, 161) // Green for ON
+                ui.visuals().selection.bg_fill // Accent color for ON
             } else {
-                Color32::from_rgb(88, 91, 112) // Gray for OFF
+                ui.visuals().widgets.inactive.bg_fill // Gray for OFF
             };
 
             ui.painter().rect(rect, Rounding::same(radius), bg_color, Stroke::NONE);
@@ -90,7 +90,7 @@ pub fn toggle_ui(ui: &mut egui::Ui, on: &mut bool, text: &str) -> egui::Response
             let circle_x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), how_on);
             let center = egui::pos2(circle_x, rect.center().y);
 
-            ui.painter().circle(center, 0.75 * radius, ui.visuals().window_fill(), Stroke::new(1.0, Color32::from_rgb(166, 173, 200)));
+            ui.painter().circle(center, 0.75 * radius, ui.visuals().window_fill(), Stroke::new(1.0, ui.visuals().widgets.inactive.bg_stroke.color));
         }
 
         ui.label(text);
@@ -1008,8 +1008,8 @@ pub fn setup_theme_visuals(ctx: &Context, theme: &crate::themes::AppTheme) {
     visuals.widgets.active.bg_stroke = Stroke::new(1.0, theme.accent2);
     visuals.widgets.active.rounding = Rounding::same(6.0);
 
-    visuals.selection.bg_fill = theme.surface1;
-    visuals.selection.stroke = Stroke::new(1.0, theme.accent);
+    visuals.selection.bg_fill = theme.accent;
+    visuals.selection.stroke = Stroke::new(1.0, theme.base);
 
     ctx.set_visuals(visuals);
 }

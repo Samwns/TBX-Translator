@@ -101,8 +101,8 @@ impl TbxApp {
 
         ui.add_space(14.0);
 
-        let save_btn = Button::new(RichText::new(t("salvar_config", lang)).color(Color32::from_rgb(17, 17, 27)).strong())
-            .fill(Color32::from_rgb(166, 227, 161))
+        let save_btn = Button::new(RichText::new(t("salvar_config", lang)).color(ui.visuals().window_fill).strong())
+            .fill(ui.visuals().selection.bg_fill)
             .min_size(vec2(220.0, 36.0))
             .rounding(Rounding::same(6.0));
 
