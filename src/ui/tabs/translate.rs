@@ -1,35 +1,6 @@
-use crate::ui::{TbxApp, AppTab};
+use crate::ui::{TbxApp, AppTab, dialogs};
 use crate::i18n::t;
 use egui::*;
-use std::path::PathBuf;
-use std::process::Command;
-
-/// On Linux, rfd's blocking portal dialog can terminate some packaged eframe
-/// applications when the portal is unavailable. Prefer the desktop's normal
-/// chooser process and retain rfd only as a cross-platform fallback.
-fn pick_game_file() -> Result<Option<PathBuf>, String> {
-    #[cfg(target_os = "linux")]
-    {
-        let output = Command::new("zenity")
-            .args(["--file-selection", "--title=Selecione o Executável ou PCK do Jogo"])
-            .output();
-        match output {
-            Ok(result) if result.status.success() => {
-                let path = String::from_utf8_lossy(&result.stdout).trim().to_owned();
-                return Ok((!path.is_empty()).then(|| PathBuf::from(path)));
-            }
-            Ok(_) => return Ok(None), // user cancelled the window
-            Err(_) => {}
-        }
-    }
-
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        rfd::FileDialog::new()
-            .set_title("Selecione o Executável ou PCK do Jogo")
-            .pick_file()
-    }))
-    .map_err(|_| "O seletor de arquivos falhou. Digite ou cole o caminho do jogo no campo acima.".to_string())
-}
 
 impl TbxApp {
     pub fn render_translate_tab(&mut self, ui: &mut Ui, ctx: &Context) {
@@ -133,7 +104,7 @@ impl TbxApp {
                     .fill(Color32::from_rgb(69, 71, 90));
 
                 if ui.add(browse_btn).clicked() {
-                    match pick_game_file() {
+                    match dialogs::pick_game_file() {
                         Ok(Some(file)) => {
                             self.game_path = file.to_string_lossy().to_string();
                             if self.engine_mode == 0 {

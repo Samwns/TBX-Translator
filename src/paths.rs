@@ -25,5 +25,15 @@ pub fn hidden_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Com
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
+    
+    // Se o TBX Translator estiver rodando de dentro de um AppImage, 
+    // remover LD_LIBRARY_PATH do ambiente filho previne que binários do sistema (zenity, wine, ou os próprios jogos)
+    // tentem carregar as bibliotecas (glibc, etc) embutidas no AppImage e causem Segmentation Fault.
+    if std::env::var_os("APPIMAGE").is_some() || std::env::var_os("APPDIR").is_some() {
+        cmd.env_remove("LD_LIBRARY_PATH");
+        cmd.env_remove("GTK_PATH");
+        cmd.env_remove("QT_PLUGIN_PATH");
+    }
     cmd
+
 }

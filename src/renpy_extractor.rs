@@ -5,7 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -292,6 +292,34 @@ fn rebuild_renpy_text(parts: &[RenpyTextPart], translations: &[String]) -> Strin
 // The Python injection script is embedded at compile time
 const DUMP_SCRIPT: &str = include_str!("desired_python.py");
 
+pub fn resolve_renpy_paths(path_str: &str) -> Result<(PathBuf, PathBuf), String> {
+    let p = Path::new(path_str);
+    if !p.exists() {
+        return Err("O caminho especificado não existe.".to_string());
+    }
+
+    if p.is_file() {
+        let base_dir = p.parent().unwrap_or(p).to_path_buf();
+        let game_dir = base_dir.join("game");
+        if game_dir.is_dir() {
+            return Ok((base_dir, game_dir));
+        }
+        return Err(format!("A pasta 'game' do Ren'Py não foi encontrada em '{}'.", base_dir.display()));
+    }
+
+    if p.file_name().map_or(false, |n| n == "game") {
+        let base_dir = p.parent().unwrap_or(p).to_path_buf();
+        return Ok((base_dir, p.to_path_buf()));
+    }
+
+    let game_dir = p.join("game");
+    if game_dir.is_dir() {
+        return Ok((p.to_path_buf(), game_dir));
+    }
+
+    Err(format!("A pasta 'game' do Ren'Py não foi encontrada em '{}'.", p.display()))
+}
+
 pub async fn extract_texts(
     executable: &str,
     translation_folder: &str,
@@ -305,15 +333,7 @@ pub async fn extract_texts(
     cancelled: Arc<AtomicBool>,
     overwrite: bool,
 ) -> Result<(), String> {
-    let exe_path = Path::new(executable);
-    let game_dir = exe_path
-        .parent()
-        .ok_or("Não foi possível determinar o diretório do jogo")?
-        .join("game");
-
-    if !game_dir.exists() {
-        return Err("A pasta 'game' não foi encontrada próximo ao executável.".to_string());
-    }
+    let (_base_dir, game_dir) = resolve_renpy_paths(executable)?;
 
     let language_id = language_identifier(translation_folder);
     let tl_dir = game_dir.join("tl").join(&language_id);
@@ -661,30 +681,169 @@ screen tbx_language_selector():
 }
 
 pub fn spawn_renpy_hidden(executable: &str) -> std::io::Result<std::process::Child> {
+    use std::process::Stdio;
+
+    let target_path = Path::new(executable);
+    let base_dir = if target_path.is_file() {
+        target_path.parent().unwrap_or(target_path).to_path_buf()
+    } else if target_path.file_name().map_or(false, |n| n == "game") {
+        target_path.parent().unwrap_or(target_path).to_path_buf()
+    } else {
+        target_path.to_path_buf()
+    };
+
+    let log_path = base_dir.join("tbx_renpy.log");
+    let stdout = std::fs::File::create(&log_path).ok().map_or(Stdio::null(), Stdio::from);
+    let stderr = std::fs::File::create(&log_path).ok().map_or(Stdio::null(), Stdio::from);
+
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Ok(metadata) = std::fs::metadata(executable) {
-            let mut perms = metadata.permissions();
-            if perms.mode() & 0o111 == 0 {
-                perms.set_mode(perms.mode() | 0o111);
-                let _ = std::fs::set_permissions(executable, perms);
+        let ensure_executable = |p: &Path| {
+            if let Ok(metadata) = std::fs::metadata(p) {
+                let mut perms = metadata.permissions();
+                if perms.mode() & 0o111 == 0 {
+                    perms.set_mode(perms.mode() | 0o755);
+                    let _ = std::fs::set_permissions(p, perms);
+                }
+            }
+        };
+
+        let is_exe = target_path.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("exe"));
+
+        // 1. Se o arquivo selecionado for um script nativo (.sh) ou binário ELF linux (não .exe)
+        if target_path.is_file() && !is_exe {
+            ensure_executable(target_path);
+            let mut cmd = if target_path.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("sh")) {
+                let mut c = crate::paths::hidden_command("sh");
+                c.arg(target_path);
+                c
+            } else {
+                crate::paths::hidden_command(target_path)
+            };
+            return cmd
+                .current_dir(&base_dir)
+                .env("RENPY_DISABLE_SOUND", "1")
+                .env("RENPY_SKIP_SPLASHSCREEN", "1")
+                .stdout(stdout)
+                .stderr(stderr)
+                .spawn();
+        }
+
+        // 2. Se for um .exe ou pasta, procurar launcher nativo (.sh) correspondente na base_dir
+        if let Some(stem) = target_path.file_stem() {
+            let candidate_sh = base_dir.join(format!("{}.sh", stem.to_string_lossy()));
+            if candidate_sh.is_file() {
+                ensure_executable(&candidate_sh);
+                return crate::paths::hidden_command("sh")
+                    .arg(&candidate_sh)
+                    .current_dir(&base_dir)
+                    .env("RENPY_DISABLE_SOUND", "1")
+                    .env("RENPY_SKIP_SPLASHSCREEN", "1")
+                    .stdout(stdout)
+                    .stderr(stderr)
+                    .spawn();
             }
         }
+
+        // Procurar qualquer script .sh na pasta do jogo
+        if let Ok(entries) = std::fs::read_dir(&base_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_file() && p.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("sh")) {
+                    ensure_executable(&p);
+                    return crate::paths::hidden_command("sh")
+                        .arg(&p)
+                        .current_dir(&base_dir)
+                        .env("RENPY_DISABLE_SOUND", "1")
+                        .env("RENPY_SKIP_SPLASHSCREEN", "1")
+                        .stdout(stdout)
+                        .stderr(stderr)
+                        .spawn();
+                }
+            }
+        }
+
+        // Procurar binários em lib/py3-linux-* ou lib/linux-*
+        let lib_dirs = [
+            "lib/py3-linux-x86_64",
+            "lib/linux-x86_64",
+            "lib/py2-linux-x86_64",
+            "lib/linux-i686",
+            "lib/py3-linux-aarch64",
+            "lib/linux-aarch64",
+        ];
+        for sub in &lib_dirs {
+            let lib_path = base_dir.join(sub);
+            if lib_path.is_dir() {
+                if let Ok(entries) = std::fs::read_dir(&lib_path) {
+                    for entry in entries.flatten() {
+                        let p = entry.path();
+                        if p.is_file() && p.extension().is_none() {
+                            ensure_executable(&p);
+                            return crate::paths::hidden_command(&p)
+                                .arg(&base_dir)
+                                .current_dir(&base_dir)
+                                .env("RENPY_DISABLE_SOUND", "1")
+                                .env("RENPY_SKIP_SPLASHSCREEN", "1")
+                                .stdout(stdout)
+                                .stderr(stderr)
+                                .spawn();
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Se for um .exe e não houver executável Linux nativo, tentar Wine se disponível
+        if is_exe || target_path.is_file() {
+            let wine_installed = std::process::Command::new("wine")
+                .arg("--version")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .map_or(false, |s| s.success());
+
+            if wine_installed {
+                return crate::paths::hidden_command("wine")
+                    .arg(target_path)
+                    .current_dir(&base_dir)
+                    .env("WINEDEBUG", "-all")
+                    .env("RENPY_DISABLE_SOUND", "1")
+                    .env("RENPY_SKIP_SPLASHSCREEN", "1")
+                    .stdout(stdout)
+                    .stderr(stderr)
+                    .spawn();
+            }
+
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!(
+                    "O arquivo '{}' é um executável Windows (.exe). No Linux Debian, instale o Wine (sudo apt install wine) ou selecione o script .sh nativo do jogo.",
+                    target_path.display()
+                ),
+            ));
+        }
+
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!(
+                "Nenhum executável ou script inicializador (.sh) do Ren'Py foi encontrado em '{}'.",
+                base_dir.display()
+            ),
+        ));
     }
 
-    use std::process::Stdio;
-    let exe_path = Path::new(executable);
-    let log_path = exe_path.parent().unwrap_or(exe_path).join("tbx_renpy.log");
-
-    let stdout = std::fs::File::create(&log_path).ok().map_or(Stdio::null(), |f| Stdio::from(f));
-    let stderr = std::fs::File::create(&log_path).ok().map_or(Stdio::null(), |f| Stdio::from(f));
-
-    crate::paths::hidden_command(executable)
-        .env("RENPY_DISABLE_SOUND", "1")
-        .env("RENPY_SKIP_SPLASHSCREEN", "1")
-        .stdout(stdout).stderr(stderr)
-        .spawn()
+    #[cfg(not(unix))]
+    {
+        crate::paths::hidden_command(executable)
+            .current_dir(&base_dir)
+            .env("RENPY_DISABLE_SOUND", "1")
+            .env("RENPY_SKIP_SPLASHSCREEN", "1")
+            .stdout(stdout)
+            .stderr(stderr)
+            .spawn()
+    }
 }
 
 
@@ -782,5 +941,32 @@ mod tests {
         assert!(content.contains("$ renpy.change_language(\"portuguese\")"));
         assert!(script.with_file_name("Initial.rpy.tbx_backup").exists());
         let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn test_resolve_renpy_paths_variants() {
+        let temp = std::env::temp_dir().join(format!("tbx-renpy-resolve-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp);
+        let _ = fs::create_dir_all(temp.join("game"));
+
+        let exe_file = temp.join("Game.exe");
+        fs::write(&exe_file, b"MZ...").unwrap();
+
+        // 1. Passando o .exe
+        let (base, game) = resolve_renpy_paths(&exe_file.to_string_lossy()).unwrap();
+        assert_eq!(base, temp);
+        assert_eq!(game, temp.join("game"));
+
+        // 2. Passando o diretório raiz
+        let (base2, game2) = resolve_renpy_paths(&temp.to_string_lossy()).unwrap();
+        assert_eq!(base2, temp);
+        assert_eq!(game2, temp.join("game"));
+
+        // 3. Passando a própria pasta game/
+        let (base3, game3) = resolve_renpy_paths(&temp.join("game").to_string_lossy()).unwrap();
+        assert_eq!(base3, temp);
+        assert_eq!(game3, temp.join("game"));
+
+        let _ = fs::remove_dir_all(&temp);
     }
 }

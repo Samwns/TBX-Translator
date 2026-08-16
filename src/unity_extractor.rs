@@ -100,6 +100,45 @@ fn extract_with_unitypy(
     Ok(Some(texts))
 }
 
+/// Obtém o comando para rodar o extrator C# (UABEA / AssetsTools.NET).
+/// Prioriza o binário standalone compilado (essencial no AppImage e releases empacotadas)
+/// e faz fallback para `dotnet run --project ...` em ambiente de desenvolvimento local.
+pub fn get_unity_extractor_command() -> Result<std::process::Command, String> {
+    let app_root = crate::paths::app_root();
+    let extractor_dir = app_root.join("unity_static_extractor");
+    let packaged_extractor = extractor_dir.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
+
+    if packaged_extractor.is_file() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Ok(metadata) = std::fs::metadata(&packaged_extractor) {
+                let mut perms = metadata.permissions();
+                if perms.mode() & 0o111 == 0 {
+                    perms.set_mode(perms.mode() | 0o755);
+                    let _ = std::fs::set_permissions(&packaged_extractor, perms);
+                }
+            }
+        }
+        let mut cmd = crate::paths::hidden_command(&packaged_extractor);
+        cmd.current_dir(&extractor_dir);
+        return Ok(cmd);
+    }
+
+    let csproj = extractor_dir.join("unity_static_extractor.csproj");
+    if csproj.is_file() {
+        let mut cmd = crate::paths::hidden_command("dotnet");
+        cmd.arg("run").arg("--project").arg(&csproj).arg("--");
+        cmd.current_dir(&extractor_dir);
+        return Ok(cmd);
+    }
+
+    Err(format!(
+        "Extrator Unity não encontrado em: {}. (Nem o binário executável nem o projeto C# foram encontrados)",
+        extractor_dir.display()
+    ))
+}
+
 pub async fn extract_texts(
     executable: &str,
     translation_folder: &str,
@@ -119,10 +158,6 @@ pub async fn extract_texts(
     
     let app_root = crate::paths::app_root();
     let extractor_dir = app_root.join("unity_static_extractor");
-    let csproj = extractor_dir.join("unity_static_extractor.csproj");
-    if !csproj.exists() {
-        return Err(format!("Projeto C# não encontrado em: {}", csproj.display()));
-    }
 
     let out_dir = output_folder(executable, translation_folder, target_lang);
     let _ = fs::create_dir_all(&out_dir);
@@ -133,23 +168,13 @@ pub async fn extract_texts(
     
     let _ = tx.send(UiMsg::Log(format!("[Unity] Chamando extrator C# (modo extract)...")));
     
-    let packaged_extractor = extractor_dir.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
-    let mut command = if packaged_extractor.is_file() {
-        crate::paths::hidden_command(packaged_extractor)
-    } else {
-        if !csproj.exists() {
-            return Err(format!("Extrator Unity não encontrado em: {}", extractor_dir.display()));
-        }
-        let mut command = crate::paths::hidden_command("dotnet");
-        command.arg("run").arg("--project").arg(&csproj).arg("--");
-        command
-    };
+    let mut command = get_unity_extractor_command()?;
     let output = command
         .arg("extract")
         .arg(&data_dir)
         .arg(&extracted_json)
         .output()
-        .map_err(|e| format!("Falha ao rodar dotnet: {}", e))?;
+        .map_err(|e| format!("Falha ao executar extrator Unity: {}", e))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     for line in stdout.lines() {

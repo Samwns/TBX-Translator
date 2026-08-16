@@ -8,7 +8,7 @@ use crate::types::UiMsg;
 use crate::api;
 use crate::godot_pck;
 use std::io::{Read, Seek, SeekFrom};
-use std::process::Command;
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// How the translation is installed. `ForceNativeSlot` is the safe choice for
@@ -89,14 +89,47 @@ fn belongs_to_selected_locale(virtual_path: &str, selected_locale: &str) -> bool
         || path.ends_with(&format!("locale.{locale}.translation"))
 }
 
-fn locate_pck(exe_path: &Path) -> Result<PathBuf, String> {
-    let external_pck = exe_path.with_extension("pck");
-    if exe_path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("exe")) && external_pck.exists() {
-        let exe_size = fs::metadata(exe_path).map(|m| m.len()).unwrap_or(0);
-        let pck_size = fs::metadata(&external_pck).map(|m| m.len()).unwrap_or(0);
-        if pck_size > exe_size || exe_size < 100_000_000 { return Ok(external_pck); }
+pub fn locate_pck(exe_path: &Path) -> Result<PathBuf, String> {
+    if !exe_path.exists() {
+        return Err("Arquivo PCK ou Executável não encontrado.".into());
     }
-    if exe_path.exists() { Ok(exe_path.to_path_buf()) } else { Err("Arquivo PCK ou Executável não encontrado.".into()) }
+    // Se o arquivo selecionado já é .pck
+    if exe_path.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("pck")) {
+        return Ok(exe_path.to_path_buf());
+    }
+
+    // Verifica .pck adjacente com mesmo stem (ex: game.pck para game.exe ou game.x86_64)
+    let external_pck = exe_path.with_extension("pck");
+    if external_pck.is_file() {
+        return Ok(external_pck);
+    }
+
+    // Verifica <nome_completo>.pck (ex: BeatBanger.x86_64.pck)
+    if let Some(filename) = exe_path.file_name() {
+        let direct_pck = exe_path.with_file_name(format!("{}.pck", filename.to_string_lossy()));
+        if direct_pck.is_file() {
+            return Ok(direct_pck);
+        }
+    }
+
+    // Se for um arquivo executável, pode conter PCK embutido
+    if exe_path.is_file() {
+        return Ok(exe_path.to_path_buf());
+    }
+
+    // Se for uma pasta, procura qualquer .pck dentro dela
+    if exe_path.is_dir() {
+        if let Ok(entries) = fs::read_dir(exe_path) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_file() && p.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("pck")) {
+                    return Ok(p);
+                }
+            }
+        }
+    }
+
+    Ok(exe_path.to_path_buf())
 }
 
 fn po_escape(value: &str) -> String {
@@ -160,7 +193,7 @@ fn dump_native_translation(data: &[u8]) -> Result<HashMap<String, String>, Strin
         fs::write(work.join("locale.translation"), data).map_err(|e| e.to_string())?;
         let script = "extends SceneTree\nfunc _init():\n\tvar translation = ResourceLoader.load(\"res://locale.translation\")\n\tif translation == null:\n\t\tquit(1)\n\t\treturn\n\tvar catalog = {}\n\tfor message_id in translation.get_message_list():\n\t\tcatalog[message_id] = translation.get_message(message_id)\n\tvar output = FileAccess.open(\"res://catalog.json\", FileAccess.WRITE)\n\toutput.store_string(JSON.stringify(catalog))\n\toutput.close()\n\tquit()\n";
         fs::write(work.join("dump_translation.gd"), script).map_err(|e| e.to_string())?;
-        let output = Command::new("godot").args(["--headless", "--path"]).arg(&work)
+        let output = crate::paths::hidden_command("godot").args(["--headless", "--path"]).arg(&work)
             .args(["--script", "res://dump_translation.gd"]).output()
             .map_err(|e| format!("Godot não encontrado para ler o catálogo nativo: {e}"))?;
         if !output.status.success() {
@@ -240,10 +273,10 @@ fn compile_native_translation(map: &HashMap<String, String>, locale: &str) -> Re
         fs::write(work.join("locale.po"), po).map_err(|e| e.to_string())?;
         let script = "extends SceneTree\nfunc _init():\n\tvar translation = load(\"res://locale.po\")\n\tif translation == null:\n\t\tpush_error(\"Could not import locale.po\")\n\t\tquit(1)\n\t\treturn\n\tvar error = ResourceSaver.save(translation, \"res://locale.translation\")\n\tquit(error)\n";
         fs::write(work.join("build_translation.gd"), script).map_err(|e| e.to_string())?;
-        let import = Command::new("godot").args(["--headless", "--editor", "--path"]).arg(&work).arg("--import").output()
+        let import = crate::paths::hidden_command("godot").args(["--headless", "--editor", "--path"]).arg(&work).arg("--import").output()
             .map_err(|e| format!("Godot não encontrado para compilar a tradução nativa: {e}"))?;
         if !import.status.success() { return Err(format!("Godot não conseguiu importar o PO: {}", String::from_utf8_lossy(&import.stderr))); }
-        let build = Command::new("godot").args(["--headless", "--path"]).arg(&work).args(["--script", "res://build_translation.gd"]).output()
+        let build = crate::paths::hidden_command("godot").args(["--headless", "--path"]).arg(&work).args(["--script", "res://build_translation.gd"]).output()
             .map_err(|e| format!("Falha ao executar o compilador Godot: {e}"))?;
         if !build.status.success() { return Err(format!("Godot não conseguiu gerar .translation: {}", String::from_utf8_lossy(&build.stderr))); }
         fs::read(work.join("locale.translation")).map_err(|e| format!("Godot não gerou locale.translation: {e}"))
@@ -975,7 +1008,7 @@ pub async fn inject_translation(
 
     let _ = tx.send(UiMsg::Log(format!("[Godot Injeção] Encontrados {} arquivos modificados para salvar no patch.", total_modified)));
 
-    let pck_name = pck_path.file_stem().unwrap().to_str().unwrap();
+    let pck_name = pck_path.file_stem().and_then(|s| s.to_str()).unwrap_or("game");
     let patch_pck = pck_path.with_file_name(format!("{}_patch_1.pck", pck_name));
 
     godot_pck::create_patch_pck(&patch_pck, &modified_files)?;
@@ -1018,5 +1051,25 @@ msgstr "Beat a level"
         assert!(values.iter().any(|value| value == "How long have you been running this place?"));
         assert!(values.iter().any(|value| value == "Long enough."));
         assert!(!values.iter().any(|value| value == "resource_name"));
+    }
+
+    #[test]
+    fn locate_pck_finds_adjacent_and_linux_binaries() {
+        let temp = std::env::temp_dir().join(format!("tbx-locate-pck-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp);
+        let _ = std::fs::create_dir_all(&temp);
+
+        let linux_bin = temp.join("Game.x86_64");
+        let pck_file = temp.join("Game.pck");
+        std::fs::write(&linux_bin, b"ELF...").unwrap();
+        std::fs::write(&pck_file, b"GDPC...").unwrap();
+
+        let located = locate_pck(&linux_bin).unwrap();
+        assert_eq!(located, pck_file);
+
+        let direct = locate_pck(&pck_file).unwrap();
+        assert_eq!(direct, pck_file);
+
+        let _ = std::fs::remove_dir_all(&temp);
     }
 }

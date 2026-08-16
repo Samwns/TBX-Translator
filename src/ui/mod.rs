@@ -1,6 +1,7 @@
 pub mod title_bar;
 pub mod modals;
 pub mod tabs;
+pub mod dialogs;
 
 // TBX Translator - ui.rs
 // Creator: samwns
@@ -272,12 +273,15 @@ impl TbxApp {
                 .unwrap_or_default();
             if path_str.to_lowercase().ends_with(".pck") {
                 self.detected_game_type = Some("Arquivo PCK do Godot detectado".to_string());
-            } else if path.is_file() && path_str.to_lowercase().ends_with(".exe") {
-                let pck_path = path.with_extension("pck");
-                if pck_path.exists() {
-                    self.detected_game_type = Some("Jogo Godot detectado (PCK adjacente)".to_string());
+            } else if path.is_file() {
+                if let Ok(pck) = crate::godot_extractor::locate_pck(path) {
+                    if pck != path {
+                        self.detected_game_type = Some("Jogo Godot detectado (PCK adjacente)".to_string());
+                    } else {
+                        self.detected_game_type = Some("Jogo Godot detectado (PCK possivelmente embutido)".to_string());
+                    }
                 } else {
-                    self.detected_game_type = Some("Jogo Godot detectado (PCK possivelmente embutido no executável)".to_string());
+                    self.detected_game_type = Some("Jogo Godot detectado".to_string());
                 }
             } else {
                 self.detected_game_type = Some("Arquivo PCK ou Executável não reconhecido".to_string());

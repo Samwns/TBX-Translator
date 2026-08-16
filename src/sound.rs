@@ -1,5 +1,5 @@
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 #[cfg(target_os = "linux")]
 use std::sync::OnceLock;
 
@@ -57,7 +57,7 @@ fn linux_player() -> Option<&'static str> {
 fn play_native(sound: AppSound) {
     let Some(player) = linux_player() else { return };
     let path = crate::paths::asset_path("sounds").join(sound.file_name());
-    let mut command = Command::new(player);
+    let mut command = crate::paths::hidden_command(player);
     if player == "aplay" {
         command.arg("-q");
     }
@@ -75,7 +75,7 @@ fn play_native(sound: AppSound) {
         return;
     }
     let path = crate::paths::asset_path("sounds").join(sound.file_name());
-    let _ = Command::new("afplay")
+    let _ = crate::paths::hidden_command("afplay")
         .arg(path)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

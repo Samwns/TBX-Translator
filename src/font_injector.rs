@@ -244,11 +244,7 @@ impl FontInjectorState {
                                 let btn = egui::Button::new(egui::RichText::new("Substituir").color(Color32::from_rgb(17, 17, 27)).strong())
                                     .fill(Color32::from_rgb(137, 180, 250));
                                 if ui.add(btn).clicked() {
-                                    if let Some(file) = rfd::FileDialog::new()
-                                        .set_title("Selecione a Nova Fonte")
-                                        .add_filter("Fontes (*.ttf, *.otf)", &["ttf", "otf"])
-                                        .pick_file()
-                                    {
+                                    if let Ok(Some(file)) = crate::ui::dialogs::pick_font_file("Selecione a Nova Fonte") {
                                         action_to_perform = Some((font_path.clone(), file));
                                     }
                                 }
@@ -301,7 +297,7 @@ impl FontInjectorState {
                 }
 
                 if let Some(target_font) = action_export {
-                    if let Some(folder) = rfd::FileDialog::new().set_title("Selecione a pasta para salvar").pick_folder() {
+                    if let Ok(Some(folder)) = crate::ui::dialogs::pick_folder("Selecione a pasta para salvar") {
                         let font_file_name = Path::new(&target_font).file_name().and_then(|s| s.to_str()).unwrap_or("");
                         let mut base_dir = PathBuf::from(game_path);
                         if base_dir.is_file() {
@@ -366,11 +362,7 @@ impl FontInjectorState {
                                 let btn = egui::Button::new(egui::RichText::new("Substituir").color(Color32::from_rgb(17, 17, 27)).strong())
                                     .fill(Color32::from_rgb(137, 180, 250));
                                 if ui.add(btn).clicked() {
-                                    if let Some(file) = rfd::FileDialog::new()
-                                        .set_title("Selecione a Nova Fonte")
-                                        .add_filter("Fontes (*.ttf, *.otf)", &["ttf", "otf"])
-                                        .pick_file()
-                                    {
+                                    if let Ok(Some(file)) = crate::ui::dialogs::pick_font_file("Selecione a Nova Fonte") {
                                         action_to_perform = Some((font_path.clone(), file));
                                     }
                                 }
@@ -451,11 +443,7 @@ impl FontInjectorState {
                                     let btn_rep = egui::Button::new(egui::RichText::new("Substituir").color(Color32::from_rgb(17, 17, 27)).strong())
                                         .fill(Color32::from_rgb(166, 227, 161));
                                     if ui.add(btn_rep).clicked() {
-                                        if let Some(file) = rfd::FileDialog::new()
-                                            .set_title("Selecione a Nova Fonte")
-                                            .add_filter("Fontes (*.ttf, *.otf)", &["ttf", "otf"])
-                                            .pick_file()
-                                        {
+                                        if let Ok(Some(file)) = crate::ui::dialogs::pick_font_file("Selecione a Nova Fonte") {
                                             action_replace = Some((f_path.clone(), file));
                                         }
                                     }
@@ -509,7 +497,7 @@ impl FontInjectorState {
                 }
 
                 if let Some(target_font) = action_export {
-                    if let Some(folder) = rfd::FileDialog::new().set_title("Selecione a pasta para salvar").pick_folder() {
+                    if let Ok(Some(folder)) = crate::ui::dialogs::pick_folder("Selecione a pasta para salvar") {
                         match export_unity_original_font(game_path, &target_font) {
                             Ok(p) => {
                                 if let Some(file_name) = p.file_name() {
@@ -858,21 +846,12 @@ pub fn scan_unity_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
         }
     }
 
-    let script_path = crate::paths::app_root().join("unity_static_extractor");
-    let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
-    let mut command = if packaged.is_file() {
-        crate::paths::hidden_command(packaged)
-    } else {
-        let mut command = crate::paths::hidden_command("dotnet");
-        command.arg("run").arg("--");
-        command
-    };
+    let mut command = crate::unity_extractor::get_unity_extractor_command()?;
     let out = command
         .arg("font-scan")
         .arg(&base_dir.to_string_lossy().to_string())
-        .current_dir(&script_path)
         .output()
-        .map_err(|e| format!("Falha ao chamar C#: {}", e))?;
+        .map_err(|e| format!("Falha ao chamar extrator Unity: {}", e))?;
 
     if !out.status.success() {
         return Err(format!("Extrator UABEA falhou: {}", String::from_utf8_lossy(&out.stderr).trim()));
@@ -908,24 +887,15 @@ pub fn inject_unity_individual(game_path_str: &str, user_font_path: &Path, targe
         }
     }
 
-    let script_path = crate::paths::app_root().join("unity_static_extractor");
-    let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
-    let mut command = if packaged.is_file() {
-        crate::paths::hidden_command(packaged)
-    } else {
-        let mut command = crate::paths::hidden_command("dotnet");
-        command.arg("run").arg("--");
-        command
-    };
+    let mut command = crate::unity_extractor::get_unity_extractor_command()?;
     let out = command
         .arg("font-inject")
         .arg(&base_dir.to_string_lossy().to_string())
         .arg(font_locator)
         .arg(font_name)
         .arg(&user_font_path.to_string_lossy().to_string())
-        .current_dir(&script_path)
         .output()
-        .map_err(|e| format!("Falha ao chamar C#: {}", e))?;
+        .map_err(|e| format!("Falha ao chamar extrator Unity: {}", e))?;
 
     let txt = String::from_utf8_lossy(&out.stdout);
     if txt.contains("[SUCCESS]") {
@@ -946,21 +916,12 @@ pub fn export_unity_original_font(game_path_str: &str, target_internal_path: &st
     }
     let output_dir = base_dir.join("tbx_temp_fonts");
     let locator = format!("{}|{}", parts[0], parts[2]);
-    let script_path = crate::paths::app_root().join("unity_static_extractor");
-    let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
-    let mut command = if packaged.is_file() {
-        crate::paths::hidden_command(packaged)
-    } else {
-        let mut command = crate::paths::hidden_command("dotnet");
-        command.arg("run").arg("--");
-        command
-    };
+    let mut command = crate::unity_extractor::get_unity_extractor_command()?;
     let out = command
         .arg("font-export")
         .arg(&base_dir)
         .arg(locator)
         .arg(&output_dir)
-        .current_dir(&script_path)
         .output()
         .map_err(|e| format!("Falha ao chamar UABEA: {e}"))?;
     let text = String::from_utf8_lossy(&out.stdout);
@@ -979,22 +940,13 @@ pub fn export_tmp_atlas_preview(game_path_str: &str, asset_path: &str, path_id: 
         base_dir = base_dir.parent().ok_or("Pasta do jogo inválida.")?.to_path_buf();
     }
     let output_dir = base_dir.join("tbx_temp_fonts");
-    let script_path = crate::paths::app_root().join("unity_static_extractor");
-    let packaged = script_path.join(if cfg!(windows) { "unity_static_extractor.exe" } else { "unity_static_extractor" });
-    let mut command = if packaged.is_file() {
-        crate::paths::hidden_command(packaged)
-    } else {
-        let mut command = crate::paths::hidden_command("dotnet");
-        command.arg("run").arg("--");
-        command
-    };
+    let mut command = crate::unity_extractor::get_unity_extractor_command()?;
     let output = command
         .arg("tmp-atlas-export")
         .arg(&base_dir)
         .arg(asset_path)
         .arg(path_id)
         .arg(&output_dir)
-        .current_dir(&script_path)
         .output()
         .map_err(|e| format!("Falha ao chamar UABEA: {e}"))?;
     let text = String::from_utf8_lossy(&output.stdout);
@@ -1018,8 +970,9 @@ pub fn export_tmp_atlas_preview(game_path_str: &str, asset_path: &str, path_id: 
 
 
 pub fn scan_godot_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
-    let file = fs::File::open(game_path_str).map_err(|e| format!("Erro ao abrir arquivo: {}", e))?;
-    let archive = crate::godot_pck::read_pck_header(file).map_err(|e| format!("Erro no PCK: {}", e))?;
+    let pck_path = crate::godot_extractor::locate_pck(Path::new(game_path_str))?;
+    let mut file = fs::File::open(&pck_path).map_err(|e| format!("Erro ao abrir arquivo PCK ({}): {}", pck_path.display(), e))?;
+    let archive = crate::godot_pck::read_pck_header(&mut file).map_err(|e| format!("Erro no PCK: {}", e))?;
 
     let mut fonts = Vec::new();
     for entry in archive.files {
@@ -1033,9 +986,10 @@ pub fn scan_godot_fonts(game_path_str: &str) -> Result<Vec<String>, String> {
 }
 
 pub fn inject_godot_individual(game_path_str: &str, user_font_path: &Path, target_internal_path: &str) -> Result<(), String> {
-    let target_pck = PathBuf::from(game_path_str);
-    let pck_name = target_pck.file_stem().unwrap().to_str().unwrap();
-    let patch_pck = target_pck.with_file_name(format!("{}_TBX_Font_Patch.pck", pck_name));
+    let target_path = PathBuf::from(game_path_str);
+    let pck_path = crate::godot_extractor::locate_pck(&target_path)?;
+    let pck_name = pck_path.file_stem().and_then(|s| s.to_str()).unwrap_or("game");
+    let patch_pck = pck_path.with_file_name(format!("{}_TBX_Font_Patch.pck", pck_name));
 
     let font_data = fs::read(user_font_path).map_err(|e| format!("Falha ao ler nova fonte: {}", e))?;
 

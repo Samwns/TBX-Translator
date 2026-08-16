@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+
 use std::sync::mpsc::Sender;
 
 use crate::types::UiMsg;
@@ -284,7 +284,7 @@ exec "$target"
         std::env::current_exe()
             .map_err(|error| format!("Não foi possível localizar o executável: {error}"))?
     };
-    Command::new(&script)
+    crate::paths::hidden_command(&script)
         .arg(std::process::id().to_string())
         .arg(package)
         .arg(current_exe)
@@ -355,7 +355,7 @@ Start-Process -FilePath $Executable
         package.to_path_buf()
     };
 
-    Command::new("powershell.exe")
+    crate::paths::hidden_command("powershell.exe")
         .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
         .arg(&script)
         .arg(std::process::id().to_string())
