@@ -5,10 +5,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Não lançado] — 2026-08-14
+## [0.0.2] — 2026-08-16
 
 ### Adicionado
 
+- Recurso de Tela Cheia (Maximizar), acessível por um botão dedicado na barra de título customizada.
 - Sistema de personalização visual com 20 temas de cores completos (Catppuccin Mocha/Latte, Nord, Dracula, Gruvbox, Tokyo Night, Rosé Pine, Cyber Neon, etc.), com persistência automática no `config.properties`.
 - Modal interativo com pré-visualização de paletas e aplicação instantânea de temas a partir da aba de Configurações.
 - Aplicação dinâmica e em tempo real do tema em toda a estrutura do aplicativo (fundo da janela, barra de título personalizada, navegação, botões e painéis).
@@ -52,6 +53,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Captura indevida de textos das ferramentas internas de desenvolvimento do Ren'Py.
 - Preservação de BBCode, espaços e tags durante traduções Godot.
 - Seleção de arquivos no Linux para pacotes AppImage e Debian.
+- Falha no AppImage em que a propagação de variáveis de ambiente causava travamento em processos externos (zenity, wine, jogos).
 
 ---
 
