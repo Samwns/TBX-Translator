@@ -6,13 +6,7 @@ impl TbxApp {
     pub fn render_custom_title_bar(&mut self, ui: &mut Ui, ctx: &Context) {
         let theme = crate::themes::AppTheme::get(&self.config.theme_id);
         let bar_color = theme.crust;
-        let underline_color = if self.engine_mode == 0 {
-            Color32::from_rgb(249, 226, 175) // Ren'Py Gold
-        } else if self.engine_mode == 1 {
-            Color32::from_rgb(137, 180, 250) // Unity Blue
-        } else {
-            Color32::from_rgb(166, 227, 161) // Godot Green
-        };
+        let underline_color = ui.visuals().selection.bg_fill;
 
         let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
         let top_rounding = if is_maximized { 0.0 } else { 12.0 };

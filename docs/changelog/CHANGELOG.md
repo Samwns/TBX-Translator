@@ -5,8 +5,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.0.2] — 2026-08-16
+## [0.0.3] — 2026-08-16
 
+### Alterado
+
+- O script de notas de lançamento (GitHub Actions) agora extrai o histórico de novidades diretamente e de forma dinâmica do `CHANGELOG.md`, resolvendo a repetição de versões passadas.
+- Toggles, botões de interface (como "Salvar configurações") e os seletores de engine ("Ren'Py", "Unity", "Godot") passam a respeitar dinamicamente a cor de destaque (`accent`) do tema visual ativo.
+- A linha de destaque da barra de título e os botões de "Iniciar Tradução" agora também utilizam o esquema de cores em tempo real do tema, ao invés das cores estáticas de cada motor de jogo.
+
+---
+
+## [0.0.2] — 2026-08-16
 ### Adicionado
 
 - Recurso de Tela Cheia (Maximizar), acessível por um botão dedicado na barra de título customizada.
@@ -30,8 +39,6 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Alterado
 
-- O script de notas de lançamento (GitHub Actions) agora extrai o histórico de novidades diretamente e de forma dinâmica do `CHANGELOG.md`, resolvendo a repetição de versões passadas.
-- Toggles e botões de interface passam a respeitar dinamicamente a cor de destaque (`accent`) do tema visual ativo, substituindo o verde fixo.
 - README principal agora usa inglês por padrão e mantém uma versão completa em português brasileiro.
 - README reorganizado, com downloads atuais, links da comunidade e versão dinâmica baseada na release mais recente.
 - As releases agora exibem primeiro o resumo das mudanças e depois os downloads.

@@ -17,7 +17,7 @@ impl TbxApp {
 
             let animated_fill = |id: &str, active: bool, selected: Color32| {
                 let amount = ctx.animate_bool_with_time(engine_selector_id.with(id), active, 0.18);
-                let idle = Color32::from_rgb(49, 50, 68);
+                let idle = ui.visuals().widgets.inactive.bg_fill;
                 Color32::from_rgb(
                     egui::lerp(idle.r() as f32..=selected.r() as f32, amount) as u8,
                     egui::lerp(idle.g() as f32..=selected.g() as f32, amount) as u8,
@@ -28,10 +28,10 @@ impl TbxApp {
             let renpy_btn = Button::image_and_text(
                 egui::Image::new(egui::include_image!("../../../assets/renpy_icon.svg")).max_height(18.0),
                 RichText::new("Ren'Py")
-                    .color(if renpy_active { Color32::from_rgb(17, 17, 27) } else { Color32::from_rgb(205, 214, 244) })
+                    .color(if renpy_active { ui.visuals().window_fill } else { ui.visuals().text_color() })
                     .strong(),
             )
-            .fill(animated_fill("renpy_engine_pill", renpy_active, Color32::from_rgb(249, 226, 175)))
+            .fill(animated_fill("renpy_engine_pill", renpy_active, ui.visuals().selection.bg_fill))
             .rounding(Rounding { nw: 6.0, sw: 6.0, ne: 0.0, se: 0.0 })
             .min_size(vec2(132.0, 40.0));
 
@@ -45,10 +45,10 @@ impl TbxApp {
             let unity_btn = Button::image_and_text(
                 egui::Image::new(egui::include_image!("../../../assets/unity_icon.svg")).max_height(18.0),
                 RichText::new("Unity")
-                    .color(if unity_active { Color32::from_rgb(17, 17, 27) } else { Color32::from_rgb(205, 214, 244) })
+                    .color(if unity_active { ui.visuals().window_fill } else { ui.visuals().text_color() })
                     .strong(),
             )
-            .fill(animated_fill("unity_engine_pill", unity_active, Color32::from_rgb(137, 180, 250)))
+            .fill(animated_fill("unity_engine_pill", unity_active, ui.visuals().selection.bg_fill))
             .rounding(Rounding::ZERO)
             .min_size(vec2(132.0, 40.0));
 
@@ -61,10 +61,10 @@ impl TbxApp {
             let godot_btn = Button::image_and_text(
                 egui::Image::new(egui::include_image!("../../../assets/godot_icon.svg")).max_height(18.0),
                 RichText::new("Godot")
-                    .color(if godot_active { Color32::from_rgb(17, 17, 27) } else { Color32::from_rgb(205, 214, 244) })
+                    .color(if godot_active { ui.visuals().window_fill } else { ui.visuals().text_color() })
                     .strong(),
             )
-            .fill(animated_fill("godot_engine_pill", godot_active, Color32::from_rgb(166, 227, 161)))
+            .fill(animated_fill("godot_engine_pill", godot_active, ui.visuals().selection.bg_fill))
             .rounding(Rounding { nw: 0.0, sw: 0.0, ne: 6.0, se: 6.0 })
             .min_size(vec2(132.0, 40.0));
 
@@ -240,12 +240,14 @@ impl TbxApp {
                 let t_time = ctx.input(|i| i.time);
                 let pulse = (t_time * 4.0).sin() as f32 * 0.5 + 0.5; // 0.0 to 1.0
 
-                let (btn_text, base_col) = if self.engine_mode == 0 {
-                    (t("iniciar_trad_renpy", lang), [249.0, 226.0, 175.0])
+                let accent = ui.visuals().selection.bg_fill;
+                let base_col = [accent.r() as f32, accent.g() as f32, accent.b() as f32];
+                let btn_text = if self.engine_mode == 0 {
+                    t("iniciar_trad_renpy", lang)
                 } else if self.engine_mode == 1 {
-                    (t("iniciar_trad_unity", lang), [137.0, 180.0, 250.0])
+                    t("iniciar_trad_unity", lang)
                 } else {
-                    (t("iniciar_trad_godot", lang), [166.0, 227.0, 161.0])
+                    t("iniciar_trad_godot", lang)
                 };
 
                 let p_col = [255.0, 255.0, 255.0];
@@ -255,7 +257,7 @@ impl TbxApp {
                     (base_col[2] * (1.0 - pulse * 0.2) + p_col[2] * pulse * 0.2) as u8,
                 );
 
-                let main_btn = Button::new(RichText::new(btn_text).color(Color32::from_rgb(17, 17, 27)).strong().size(14.0))
+                let main_btn = Button::new(RichText::new(btn_text).color(ui.visuals().window_fill).strong().size(14.0))
                     .fill(btn_color)
                     .min_size(vec2(220.0, 38.0))
                     .rounding(Rounding::same(6.0));
@@ -271,8 +273,8 @@ impl TbxApp {
 
                 if self.engine_mode == 1 || self.engine_mode == 2 {
                     let btn_text = if self.engine_mode == 1 { "INJETAR TRADUÇÃO (UNITY)" } else { "INJETAR TRADUÇÃO (GODOT)" };
-                    let inject_btn = Button::new(RichText::new(btn_text).color(Color32::from_rgb(17, 17, 27)).strong().size(14.0))
-                        .fill(Color32::from_rgb(166, 227, 161))
+                    let inject_btn = Button::new(RichText::new(btn_text).color(ui.visuals().window_fill).strong().size(14.0))
+                        .fill(ui.visuals().selection.bg_fill)
                         .min_size(vec2(180.0, 38.0))
                         .rounding(Rounding::same(6.0));
 
@@ -285,8 +287,8 @@ impl TbxApp {
                     }
                 }
 
-                let editor_btn = Button::new(RichText::new(t("abrir_editor", lang)).color(Color32::WHITE).strong().size(14.0))
-                    .fill(Color32::from_rgb(49, 50, 68))
+                let editor_btn = Button::new(RichText::new(t("abrir_editor", lang)).color(ui.visuals().text_color()).strong().size(14.0))
+                    .fill(ui.visuals().widgets.inactive.bg_fill)
                     .min_size(vec2(200.0, 38.0))
                     .rounding(Rounding::same(6.0));
 
