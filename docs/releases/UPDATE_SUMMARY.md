@@ -1,9 +1,3 @@
-- Extração e injeção Godot ampliadas, incluindo idiomas nativos, arquivos PO, diálogos e textos de história.
-- Integração Ren'Py mais segura, adicionando o novo idioma ao menu do jogo sem forçar a preferência do jogador.
-- Tratamento de strings aprimorado para preservar tags, variáveis, BBCode, espaços e formatação.
-- Traduções independentes por engine, com concorrência controlada, cache, cancelamento e logs separados.
-- Central de atualizações com changelog, download, instalação e reinício do aplicativo.
-- Interface renovada com seletor de engines em pílulas, atalhos sociais reposicionados, ícones SVG, sons, notificações e cantos arredondados.
-- Tela de novidades exibida uma única vez após cada atualização do aplicativo.
-- Scanner de fontes Ren'Py mais rápido, com detecção direta e compatibilidade ampliada entre versões do motor.
-- Novo site responsivo com downloads diretos, documentação integrada e suporte multilíngue.
+- Recurso de Tela Cheia (Maximizar) acessível por um botão na barra de título customizada, preenchendo a tela sem bordas.
+- Correção de falha crítica no AppImage onde a propagação de variáveis de ambiente travava processos externos (zenity, wine e jogos).
+- Atualização e alinhamento das versões do CHANGELOG.md para refletir corretamente a release (v0.0.2).
