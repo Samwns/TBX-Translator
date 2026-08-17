@@ -598,6 +598,13 @@ pub async fn extract_texts(
     tbx_language_labels = dict([("{0}", "{1}")])
     tbx_use_language_overlay = {2}
 
+    try:
+        if getattr(persistent, "tbx_language_set", None) != "{0}":
+            _preferences.language = "{0}"
+            persistent.tbx_language_set = "{0}"
+    except:
+        pass
+
     def tbx_language_name(language):
         return tbx_language_labels.get(language, language.replace("_", " ").title())
 

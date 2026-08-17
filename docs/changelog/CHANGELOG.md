@@ -5,17 +5,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.0.3] — 2026-08-16
-
-### Alterado
-
-- O script de notas de lançamento (GitHub Actions) agora extrai o histórico de novidades diretamente e de forma dinâmica do `CHANGELOG.md`, resolvendo a repetição de versões passadas.
-- Toggles, botões de interface (como "Salvar configurações") e os seletores de engine ("Ren'Py", "Unity", "Godot") passam a respeitar dinamicamente a cor de destaque (`accent`) do tema visual ativo.
-- A linha de destaque da barra de título e os botões de "Iniciar Tradução" agora também utilizam o esquema de cores em tempo real do tema, ao invés das cores estáticas de cada motor de jogo.
-
----
-
 ## [0.0.2] — 2026-08-16
+
+### Adicionado
+
+- O script de notas de lançamento (GitHub Actions) agora extrai o histórico de novidades diretamente e de forma dinâmica do `CHANGELOG.md`.
+- Toggles, botões de interface e seletores de engine ("Ren'Py", "Unity", "Godot") respeitam dinamicamente a cor de destaque (`accent`) do tema visual ativo.
+- Jogos Ren'Py agora ativam automaticamente o idioma traduzido no primeiro boot após a tradução, independentemente da versão da engine.
 ### Adicionado
 
 - Recurso de Tela Cheia (Maximizar), acessível por um botão dedicado na barra de título customizada.
