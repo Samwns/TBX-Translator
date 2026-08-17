@@ -15,9 +15,9 @@ impl TbxApp {
             let godot_active = self.engine_mode == 2;
             let engine_selector_id = ui.id();
 
+            let idle = ui.visuals().widgets.inactive.bg_fill;
             let animated_fill = |id: &str, active: bool, selected: Color32| {
                 let amount = ctx.animate_bool_with_time(engine_selector_id.with(id), active, 0.18);
-                let idle = ui.visuals().widgets.inactive.bg_fill;
                 Color32::from_rgb(
                     egui::lerp(idle.r() as f32..=selected.r() as f32, amount) as u8,
                     egui::lerp(idle.g() as f32..=selected.g() as f32, amount) as u8,
