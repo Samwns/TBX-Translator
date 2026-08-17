@@ -302,6 +302,7 @@ pub async fn extract_texts(
     tx: Sender<UiMsg>,
     cancelled: Arc<AtomicBool>,
     overwrite: bool,
+    config: crate::app_config::AppConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exe_path = Path::new(game_path);
     let pck_ext = exe_path.with_extension("pck");
@@ -330,10 +331,10 @@ pub async fn extract_texts(
 
     if overwrite {
         fs::write(&translated_json, "{}")?;
-        let _ = tx.send(UiMsg::Log(format!("[Godot] Tradução anterior limpa: {}", translated_json.display())));
+    let _ = tx.send(UiMsg::Log(format!("Tradução anterior limpa: {}", translated_json.display())));
     }
 
-    let _ = tx.send(UiMsg::Log(format!("[Godot] Lendo cabeçalho do PCK: {}", pck_path.display())));
+    let _ = tx.send(UiMsg::Log(format!("Lendo cabeçalho do PCK: {}", pck_path.display())));
 
     let mut file = fs::File::open(&pck_path).map_err(|e| format!("Falha ao abrir PCK: {}", e))?;
     let pck_archive = godot_pck::read_pck_header(&mut file)?;
@@ -345,7 +346,7 @@ pub async fn extract_texts(
     }).collect();
     let source_locale = resolve_native_locale(source_lang, &available_locales)
         .unwrap_or_else(|| api::get_lang_code(source_lang).to_string());
-    let _ = tx.send(UiMsg::Log(format!("[Godot] Idioma selecionado: {source_lang} → usando somente locale '{source_locale}'.")));
+    let _ = tx.send(UiMsg::Log(format!("Idioma selecionado: {source_lang} → usando somente locale '{source_locale}'.")));
 
     // If the export includes the source PO, it is the authoritative catalogue.
     // Reading scenes/configs as well would collect property names, sample data,
@@ -363,11 +364,11 @@ pub async fn extract_texts(
         if file.seek(SeekFrom::Start(entry.offset)).is_ok() && file.read_exact(&mut data).is_ok() {
             match dump_native_translation(&data) {
                 Ok(catalog) => {
-                    let _ = tx.send(UiMsg::Log(format!("[Godot] Catálogo binário '{}': {} mensagens.", entry.path, catalog.len())));
+                    let _ = tx.send(UiMsg::Log(format!("Catálogo binário '{}': {} mensagens.", entry.path, catalog.len())));
                     native_catalog = catalog;
                 }
                 Err(error) => {
-                    let _ = tx.send(UiMsg::Log(format!("[Godot Aviso] Não foi possível ler '{}': {}", entry.path, error)));
+                    let _ = tx.send(UiMsg::Log(format!("[Aviso] Não foi possível ler '{}': {}", entry.path, error)));
                 }
             }
         }
@@ -385,7 +386,7 @@ pub async fn extract_texts(
             }
         }
         let _ = tx.send(UiMsg::Log(format!(
-            "[Godot] Recursos binários de diálogo: {} textos visíveis encontrados.", embedded_dialogue_count
+            "Recursos binários de diálogo: {} textos visíveis encontrados.", embedded_dialogue_count
         )));
     }
 
@@ -443,9 +444,9 @@ pub async fn extract_texts(
         }
     }
 
-    let _ = tx.send(UiMsg::Log(format!("[Godot] Encontrados {} arquivos traduzíveis (PCK + Externos).", files_to_translate_content.len())));
+    let _ = tx.send(UiMsg::Log(format!("Encontrados {} arquivos/recursos traduzíveis.", files_to_translate_content.len())));
     for (path, _) in &files_to_translate_content {
-        let _ = tx.send(UiMsg::Log(format!("[Godot] Fonte selecionada: {path}")));
+        let _ = tx.send(UiMsg::Log(format!("Fonte selecionada: {path}")));
     }
 
     let mut texts_to_translate: Vec<String> = Vec::new();
@@ -565,7 +566,7 @@ pub async fn extract_texts(
     let mut unique_texts: Vec<String> = texts_to_translate.into_iter().collect::<std::collections::HashSet<_>>().into_iter().collect();
     unique_texts.retain(|s| s.len() > 1 && s.chars().any(|c| c.is_alphabetic()));
 
-    let _ = tx.send(UiMsg::Log(format!("[Extração Godot] {} textos únicos encontrados para traduzir.", unique_texts.len())));
+    let _ = tx.send(UiMsg::Log(format!("Extração concluída: {} textos únicos encontrados para traduzir.", unique_texts.len())));
 
     if unique_texts.is_empty() {
         return Err(format!(
@@ -576,7 +577,7 @@ pub async fn extract_texts(
 
     let message_ids_path = out_dir.join("godot_message_ids.json");
     fs::write(&message_ids_path, serde_json::to_string_pretty(&message_ids)?)?;
-    let _ = tx.send(UiMsg::Log(format!("[Godot] {} IDs nativos preservados em {}.", message_ids.len(), message_ids_path.display())));
+    let _ = tx.send(UiMsg::Log(format!("{} IDs nativos preservados em {}.", message_ids.len(), message_ids_path.display())));
 
     let tgt_code = api::get_lang_code(target_lang);
 
@@ -605,7 +606,7 @@ pub async fn extract_texts(
     }
 
     if dict_hits > 0 {
-        let _ = tx.send(UiMsg::Log(format!("[Godot - Dicionário Padrão] {} termos resolvidos instantaneamente.", dict_hits)));
+        let _ = tx.send(UiMsg::Log(format!("[Dicionário Padrão] {} termos resolvidos instantaneamente.", dict_hits)));
     }
 
     let batch_size = 64usize;
@@ -616,12 +617,20 @@ pub async fn extract_texts(
     let client = reqwest::Client::new();
     let src_code = api::get_lang_code(source_lang);
 
-    for chunk in to_translate.chunks(batch_size) {
+    let total_chunks = (total + batch_size - 1) / batch_size;
+    for (chunk_idx, chunk) in to_translate.chunks(batch_size).enumerate() {
         if cancelled.load(Ordering::SeqCst) {
-            let _ = tx.send(UiMsg::Log("[Godot] Cancelamento solicitado...".into()));
+            let _ = tx.send(UiMsg::Log("Cancelamento solicitado...".into()));
             was_cancelled = true;
             break;
         }
+
+        let _ = tx.send(UiMsg::Log(format!(
+            "Traduzindo lote {} de {} ({} blocos)...",
+            chunk_idx + 1,
+            total_chunks,
+            chunk.len()
+        )));
 
         let mut protected_chunks: Vec<(String, Vec<(String, String)>)> = Vec::new();
         for original in chunk {
@@ -641,8 +650,9 @@ pub async fn extract_texts(
         }
 
         let strings_to_translate: Vec<String> = protected_chunks.iter().map(|(s, _)| s.clone()).collect();
+        let ignored_tags = config.get_active_tags(Some(out_dir.join("tbx_tags.txt")));
 
-        if let Ok(translated_chunk) = api::translate_batch_concurrent(&client, &strings_to_translate, src_code, tgt_code, threads as usize).await {
+        if let Ok(translated_chunk) = api::translate_batch_concurrent(&client, &strings_to_translate, src_code, tgt_code, threads as usize, config.usar_traducao_pivo, &ignored_tags).await {
             for (idx, mut trad) in translated_chunk.into_iter().enumerate() {
                 let original = &chunk[idx];
                 let (_, replacements) = &protected_chunks[idx];
@@ -653,11 +663,11 @@ pub async fn extract_texts(
                 translation_map.insert(original.to_string(), trad);
             }
         } else {
-            let _ = tx.send(UiMsg::Log("[Godot] Lote recusado pelo tradutor; tentando item por item.".into()));
+            let _ = tx.send(UiMsg::Log("Lote recusado pelo tradutor; tentando item por item.".into()));
             for (idx, original) in chunk.iter().enumerate() {
                 if cancelled.load(Ordering::SeqCst) { was_cancelled = true; break; }
                 let (protected, replacements) = &protected_chunks[idx];
-                match api::translate_batch(&client, &vec![protected.clone()], api_engine, src_code, tgt_code).await {
+                match api::translate_batch(&client, &vec![protected.clone()], api_engine, src_code, tgt_code, config.usar_traducao_pivo, &ignored_tags).await {
                     Ok(mut res) => {
                         if let Some(mut trad) = res.pop() {
                             for (orig_var, placeholder) in replacements {
@@ -686,7 +696,7 @@ pub async fn extract_texts(
     }
 
     if was_cancelled {
-        let _ = tx.send(UiMsg::Log(format!("[Aviso] Extração Godot cancelada. Os textos foram salvos em {}.", translated_json.display())));
+        let _ = tx.send(UiMsg::Log(format!("[Aviso] Extração cancelada. Os textos foram salvos em {}.", translated_json.display())));
         let _ = tx.send(UiMsg::Cancelled);
     } else if !translation_failures.is_empty() {
         return Err(format!(
@@ -694,7 +704,7 @@ pub async fn extract_texts(
             translation_failures.len(), translation_failures[0]
         ).into());
     } else {
-        let _ = tx.send(UiMsg::Log(format!("[Godot] Sucesso! Textos extraídos e traduzidos salvos em: {}", translated_json.display())));
+        let _ = tx.send(UiMsg::Log(format!("Sucesso! Textos extraídos e traduzidos salvos em: {}", translated_json.display())));
         let _ = tx.send(UiMsg::Done("Extração concluída! Verifique o Editor de Tradução se quiser fazer ajustes manuais antes de Injetar.".to_string()));
     }
 
@@ -742,7 +752,7 @@ pub async fn inject_translation(
         let native_path = locales.translation_paths.iter().find(|path| {
             path.ends_with(&format!("locale.{locale}.translation"))
         }).ok_or("Não foi encontrado o arquivo .translation do idioma selecionado.")?;
-        let _ = tx.send(UiMsg::Log(format!("[Godot Nativo] Compilando PT-BR no slot '{locale}' já registrado pelo jogo...")));
+    let _ = tx.send(UiMsg::Log(format!("Compilando PT-BR no slot '{locale}' já registrado pelo jogo...")));
         // The resource keeps the original locale code. Consequently the game's
         // own language menu continues to work; selecting this slot displays PT-BR.
         let native_translation_map: HashMap<String, String> = translation_map.iter()
@@ -751,7 +761,7 @@ pub async fn inject_translation(
             })
             .collect();
         let _ = tx.send(UiMsg::Log(format!(
-            "[Godot Nativo] Compilando {} mensagens ({} com ID original preservado).",
+            "Compilando {} mensagens ({} com ID original preservado).",
             native_translation_map.len(), message_ids.len()
         )));
         let compiled = compile_native_translation(&native_translation_map, &locale)?;
@@ -762,7 +772,7 @@ pub async fn inject_translation(
         native_files.insert(native_path.clone(), compiled);
         godot_pck::create_patch_pck(&patch_pck, &native_files)?;
         let _ = tx.send(UiMsg::Log(format!(
-            "[Godot Nativo] Patch instalado em {}. No menu do jogo, escolha o idioma '{}' para usar PT-BR.",
+            "Patch instalado em {}. No menu do jogo, escolha o idioma '{}' para usar PT-BR.",
             patch_pck.display(), locale
         )));
         let _ = tx.send(UiMsg::Done("Injeção Godot nativa concluída!".to_string()));
@@ -788,7 +798,7 @@ pub async fn inject_translation(
         return Err("Arquivo PCK ou Executável não encontrado.".into());
     }
 
-    let _ = tx.send(UiMsg::Log(format!("[Godot Injeção] Lendo cabeçalho do PCK: {}", pck_path.display())));
+    let _ = tx.send(UiMsg::Log(format!("Lendo cabeçalho do PCK: {}", pck_path.display())));
 
     let mut file = fs::File::open(&pck_path).map_err(|e| format!("Falha ao abrir PCK: {}", e))?;
     let pck_archive = godot_pck::read_pck_header(&mut file)?;
@@ -1006,13 +1016,13 @@ pub async fn inject_translation(
         }
     }
 
-    let _ = tx.send(UiMsg::Log(format!("[Godot Injeção] Encontrados {} arquivos modificados para salvar no patch.", total_modified)));
+    let _ = tx.send(UiMsg::Log(format!("Encontrados {} arquivos modificados para salvar no patch.", total_modified)));
 
     let pck_name = pck_path.file_stem().and_then(|s| s.to_str()).unwrap_or("game");
     let patch_pck = pck_path.with_file_name(format!("{}_patch_1.pck", pck_name));
 
     godot_pck::create_patch_pck(&patch_pck, &modified_files)?;
-    let _ = tx.send(UiMsg::Log(format!("[Godot Patch direto] Sucesso! Patch gerado: {}. Este modo substitui arquivos de diálogo, sem criar um override.cfg inválido.", patch_pck.display())));
+    let _ = tx.send(UiMsg::Log(format!("Sucesso! Patch gerado: {}. Este modo substitui arquivos de diálogo, sem criar um override.cfg inválido.", patch_pck.display())));
     let _ = tx.send(UiMsg::Done("Injeção Godot concluída!".to_string()));
 
     Ok(())

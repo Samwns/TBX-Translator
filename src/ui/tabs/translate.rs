@@ -296,6 +296,22 @@ impl TbxApp {
                     self.editor_state.load_directory(&self.game_path, &self.config.pasta_traducao, self.engine_mode as u8);
                     self.current_tab = AppTab::Editor;
                 }
+
+                ui.add_space(8.0);
+                let settings_btn = Button::image(
+                    egui::Image::new(egui::include_image!("../../../assets/settings_icon.svg"))
+                        .max_height(20.0)
+                        .tint(ui.visuals().text_color())
+                )
+                    .fill(ui.visuals().widgets.inactive.bg_fill)
+                    .min_size(vec2(40.0, 38.0))
+                    .rounding(Rounding::same(6.0));
+
+                if ui.add(settings_btn).clicked() {
+                    self.engine_modal_tab = self.engine_mode as usize;
+                    self.engine_modal_single_mode = true;
+                    self.show_engine_modal = true;
+                }
             }
             if current_engine_running {
                 // Running task indicator and cancel button
@@ -370,7 +386,8 @@ impl TbxApp {
                 .stick_to_bottom(true)
                 .id_salt("mini_log_scroll")
                 .show(ui, |ui| {
-                    if let Some(tab) = self.log_tabs.get(self.active_log_tab) {
+                    let engine_log_idx = self.engine_log_tabs[self.engine_mode as usize];
+                    if let Some(tab) = self.log_tabs.get(engine_log_idx) {
                         for line in tab.lines.iter().rev().take(15).rev() {
                             ui.label(RichText::new(line).monospace().size(11.0).color(Color32::from_rgb(166, 227, 161)));
                         }

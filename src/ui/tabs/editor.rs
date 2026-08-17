@@ -15,7 +15,7 @@ impl TbxApp {
             ui.label(RichText::new("Editor Manual de Textos").color(Color32::WHITE).strong().size(16.0));
         });
         ui.add_space(6.0);
-        self.editor_state.render_ui(ui, ctx);
+        self.editor_state.render_ui(ui, ctx, &mut self.tags_jogo);
     }
 
 

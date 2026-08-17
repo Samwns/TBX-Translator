@@ -92,6 +92,7 @@ impl TbxApp {
                 "Configurações extras dos motores...",
             );
             if ui.add(engine_settings).clicked() {
+                self.engine_modal_single_mode = false;
                 self.show_engine_modal = true;
             }
 

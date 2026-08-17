@@ -101,6 +101,15 @@ async fn translate_one(
     from_lang: &str,
     to_lang: &str,
 ) -> Result<String, String> {
+    translate_one_internal(client, line, from_lang, to_lang).await
+}
+
+async fn translate_one_internal(
+    client: &Client,
+    line: &str,
+    from_lang: &str,
+    to_lang: &str,
+) -> Result<String, String> {
     let cache_key = (from_lang.to_string(), to_lang.to_string(), line.to_string());
     if let Ok(cache) = translation_cache().lock() {
         if let Some(translated) = cache.get(&cache_key) {
@@ -174,6 +183,7 @@ async fn translate_visible_segment(
     text: &str,
     from_lang: &str,
     to_lang: &str,
+    usar_pivo: bool,
 ) -> Result<String, String> {
     let without_left = text.trim_start_matches(char::is_whitespace);
     let left_len = text.len() - without_left.len();
@@ -182,7 +192,12 @@ async fn translate_visible_segment(
     if core.is_empty() {
         return Ok(text.to_string());
     }
-    let translated = translate_one(client, core, from_lang, to_lang).await?;
+    let translated = if usar_pivo && from_lang != "en" && to_lang != "en" {
+        let en = translate_one(client, core, from_lang, "en").await?;
+        translate_one(client, &en, "en", to_lang).await?
+    } else {
+        translate_one(client, core, from_lang, to_lang).await?
+    };
     Ok(format!("{}{}{}", &text[..left_len], translated, &text[right_start..]))
 }
 
@@ -194,6 +209,8 @@ async fn translate_preserving_lines(
     text: &str,
     from_lang: &str,
     to_lang: &str,
+    usar_pivo: bool,
+    tags_ignoradas: &[String],
 ) -> Result<String, String> {
     let mut translated = String::new();
     for raw_line in text.split_inclusive('\n') {
@@ -206,14 +223,14 @@ async fn translate_preserving_lines(
             None => (line_with_optional_cr, ""),
         };
 
-        translated.push_str(&translate_preserving_markup(client, line, from_lang, to_lang).await?);
+        translated.push_str(&translate_preserving_markup(client, line, from_lang, to_lang, usar_pivo, tags_ignoradas).await?);
         translated.push_str(carriage_return);
         translated.push_str(terminator);
     }
     Ok(translated)
 }
 
-fn find_next_markup(text: &str) -> Option<(usize, usize)> {
+fn find_next_markup(text: &str, protected_words: &[String]) -> Option<(usize, usize)> {
     static RE: OnceLock<Regex> = OnceLock::new();
     let re = RE.get_or_init(|| Regex::new(r"(?x)
         \[[^\]]*\] |
@@ -222,7 +239,27 @@ fn find_next_markup(text: &str) -> Option<(usize, usize)> {
         %\([^)]+\)[sdf] |
         %[sdf]
     ").unwrap());
-    re.find(text).map(|m| (m.start(), m.end()))
+    
+    let mut earliest: Option<(usize, usize)> = None;
+    
+    // Find earliest regex match
+    if let Some(mat) = re.find(text) {
+        earliest = Some((mat.start(), mat.end()));
+    }
+    
+    // Find earliest protected word match
+    for word in protected_words {
+        let trimmed = word.trim();
+        if trimmed.is_empty() { continue; }
+        
+        if let Some(pos) = text.find(trimmed) {
+            if earliest.is_none() || pos < earliest.unwrap().0 {
+                earliest = Some((pos, pos + trimmed.len()));
+            }
+        }
+    }
+    
+    earliest
 }
 
 /// Translate only visible text and copy Godot/RichText BBCode tags byte for
@@ -233,6 +270,8 @@ async fn translate_preserving_markup(
     text: &str,
     from_lang: &str,
     to_lang: &str,
+    usar_pivo: bool,
+    tags_ignoradas: &[String],
 ) -> Result<String, String> {
     if text.trim().is_empty() {
         return Ok(text.to_string());
@@ -240,14 +279,14 @@ async fn translate_preserving_markup(
 
     let mut output = String::with_capacity(text.len());
     let mut cursor = 0usize;
-    while let Some((relative_open, relative_close)) = find_next_markup(&text[cursor..]) {
+    while let Some((relative_open, relative_close)) = find_next_markup(&text[cursor..], tags_ignoradas) {
         let open = cursor + relative_open;
         let close = cursor + relative_close;
         
         let visible = &text[cursor..open];
         for piece in split_for_translation(visible) {
             if !piece.is_empty() {
-                output.push_str(&translate_visible_segment(client, &piece, from_lang, to_lang).await?);
+                output.push_str(&translate_visible_segment(client, &piece, from_lang, to_lang, usar_pivo).await?);
             }
         }
 
@@ -257,7 +296,7 @@ async fn translate_preserving_markup(
 
     for piece in split_for_translation(&text[cursor..]) {
         if !piece.is_empty() {
-            output.push_str(&translate_visible_segment(client, &piece, from_lang, to_lang).await?);
+            output.push_str(&translate_visible_segment(client, &piece, from_lang, to_lang, usar_pivo).await?);
         }
     }
     Ok(output)
@@ -269,6 +308,8 @@ pub async fn translate_batch(
     _url: &str,
     from_lang: &str,
     to_lang: &str,
+    usar_pivo: bool,
+    tags_ignoradas: &[String],
 ) -> Result<Vec<String>, String> {
     let mut translations = Vec::with_capacity(texts.len());
 
@@ -279,7 +320,7 @@ pub async fn translate_batch(
             continue;
         }
 
-        translations.push(translate_preserving_lines(client, line, from_lang, to_lang).await?);
+        translations.push(translate_preserving_lines(client, line, from_lang, to_lang, usar_pivo, tags_ignoradas).await?);
     }
 
     Ok(translations)
@@ -298,7 +339,7 @@ struct PackedItem {
     tags: Vec<(String, String)>,
 }
 
-fn prepare_packed_item(index: usize, text: &str) -> PackedItem {
+fn prepare_packed_item(index: usize, text: &str, tags_ignoradas: &[String]) -> PackedItem {
     let without_left = text.trim_start_matches(char::is_whitespace);
     let left_len = text.len() - without_left.len();
     let core = without_left.trim_end_matches(char::is_whitespace);
@@ -307,7 +348,7 @@ fn prepare_packed_item(index: usize, text: &str) -> PackedItem {
     let mut tags = Vec::new();
     let mut cursor = 0usize;
 
-    while let Some((relative_open, relative_close)) = find_next_markup(&core[cursor..]) {
+    while let Some((relative_open, relative_close)) = find_next_markup(&core[cursor..], tags_ignoradas) {
         let open = cursor + relative_open;
         let close = cursor + relative_close;
         
@@ -334,6 +375,7 @@ async fn translate_packed_group(
     items: &[PackedItem],
     from_lang: &str,
     to_lang: &str,
+    usar_pivo: bool,
 ) -> Result<Vec<(usize, String)>, String> {
     let payload = items
         .iter()
@@ -343,7 +385,13 @@ async fn translate_packed_group(
     if encoded_len(&payload) > MAX_ENCODED_TEXT_LEN {
         return Err("Lote excedeu o limite seguro da URL".to_string());
     }
-    let translated = translate_one(client, &payload, from_lang, to_lang).await?;
+    
+    let translated = if usar_pivo && from_lang != "en" && to_lang != "en" {
+        let en = translate_one(client, &payload, from_lang, "en").await?;
+        translate_one(client, &en, "en", to_lang).await?
+    } else {
+        translate_one(client, &payload, from_lang, to_lang).await?
+    };
     let pieces: Vec<&str> = translated.split("⟦TBXITEM⟧").collect();
     if pieces.len() != items.len() {
         return Err("O serviço alterou os separadores do lote".to_string());
@@ -375,10 +423,12 @@ pub async fn translate_batch_concurrent(
     from_lang: &str,
     to_lang: &str,
     requested_concurrency: usize,
+    usar_pivo: bool,
+    tags_ignoradas: &[String],
 ) -> Result<Vec<String>, String> {
     let concurrency = requested_concurrency.clamp(1, 4);
     if texts.len() <= 1 {
-        return translate_batch(client, texts, "", from_lang, to_lang).await;
+        return translate_batch(client, texts, "", from_lang, to_lang, usar_pivo, tags_ignoradas).await;
     }
 
     let mut results: Vec<Option<String>> = vec![None; texts.len()];
@@ -391,7 +441,7 @@ pub async fn translate_batch_concurrent(
             results[index] = Some(String::new());
             continue;
         }
-        let item = prepare_packed_item(index, text);
+        let item = prepare_packed_item(index, text, tags_ignoradas);
         let item_len = encoded_len(&item.masked)
             + if current_group.is_empty() { 0 } else { encoded_len(PACK_SEPARATOR) };
         if !current_group.is_empty()
@@ -420,11 +470,13 @@ pub async fn translate_batch_concurrent(
             let from = from_lang.to_string();
             let to = to_lang.to_string();
             let stagger = (group_number % concurrency) as u64 * 60;
+            let usar_pivo_c = usar_pivo;
+            let tags_ignoradas_c = tags_ignoradas.to_vec();
             jobs.spawn(async move {
                 if stagger > 0 {
                     tokio::time::sleep(std::time::Duration::from_millis(stagger)).await;
                 }
-                match translate_packed_group(&client, &group, &from, &to).await {
+                match translate_packed_group(&client, &group, &from, &to, usar_pivo_c).await {
                     Ok(translated) => Ok::<_, String>(translated),
                     Err(error)
                         if error == "O serviço alterou os separadores do lote"
@@ -434,7 +486,7 @@ pub async fn translate_batch_concurrent(
                         let mut fallback = Vec::with_capacity(group.len());
                         for item in group {
                             let original = format!("{}{}{}", item.left_space, item.masked, item.right_space);
-                            let mut translated = translate_preserving_lines(&client, &original, &from, &to).await?;
+                            let mut translated = translate_preserving_lines(&client, &original, &from, &to, usar_pivo_c, &tags_ignoradas_c).await?;
                             for (token, tag) in &item.tags {
                                 translated = translated.replace(token, tag);
                             }

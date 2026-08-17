@@ -128,12 +128,19 @@ pub struct TbxApp {
     // Modals
     pub show_overwrite_modal: bool,
     pub show_engine_modal: bool,
+    pub engine_modal_single_mode: bool,
     pub show_cancel_modal: bool,
     pub engine_modal_tab: usize, // 0 = RenPy, 1 = Unity
     pub show_alert_modal: Option<(bool, String, String)>, // (is_error, title, message)
     pub show_post_update_changelog: bool,
     pub post_update_changelog: String,
     pub show_themes_modal: bool,
+    pub show_tags_modal: bool,
+    pub tags_modal_tab: usize,
+    pub tags_padrao: String,
+    pub tags_personalizadas: String,
+    pub tags_jogo: String,
+    pub show_info_modal: Option<(String, String)>, // Title, Description
     // Cached languages
     pub source_languages: Vec<&'static str>,
     pub target_languages: Vec<&'static str>,
@@ -209,11 +216,30 @@ impl TbxApp {
             font_injector_state: FontInjectorState::default(),
             show_overwrite_modal: false,
             show_engine_modal: false,
+            engine_modal_single_mode: false,
             show_cancel_modal: false,
             engine_modal_tab: 0,
             show_alert_modal: None,
             show_post_update_changelog,
             post_update_changelog: BUILTIN_UPDATE_SUMMARY.trim().to_string(),
+            show_themes_modal: false,
+            show_tags_modal: false,
+            tags_modal_tab: 0,
+            tags_padrao: {
+                let default_tags = "[name]\n[player_name]\n{b}\n{/b}\n{i}\n{/i}\n{u}\n{/u}\n{color}\n{/color}\n{w}\n{p}\n{nw}";
+                if !std::path::Path::new("tags_padrao.txt").exists() {
+                    let _ = std::fs::write("tags_padrao.txt", default_tags);
+                }
+                let mut content = std::fs::read_to_string("tags_padrao.txt").unwrap_or_default();
+                if content.trim().is_empty() {
+                    let _ = std::fs::write("tags_padrao.txt", default_tags);
+                    content = default_tags.to_string();
+                }
+                content
+            },
+            tags_personalizadas: std::fs::read_to_string("tags_personalizadas.txt").unwrap_or_default(),
+            tags_jogo: String::new(),
+            show_info_modal: None,
             source_languages: {
                 let mut langs = vec!["Detectar Automaticamente"];
                 langs.extend_from_slice(crate::api::ALL_LANGUAGES);
@@ -228,7 +254,7 @@ impl TbxApp {
             update_downloading: false,
             update_status: String::new(),
             update_progress: (0, 0),
-            show_themes_modal: false,
+
         };
 
         app.detect_game_type();
@@ -493,6 +519,7 @@ impl TbxApp {
         let threads = if self.config.usar_multi_trad { self.config.threads_ativas } else { 1 };
         let engine_type = self.engine_mode;
         let api_engine = self.config.motor_api.clone();
+        let app_config = self.config.clone();
 
         thread::spawn(move || {
             let rt = match tokio::runtime::Builder::new_multi_thread()
@@ -521,6 +548,7 @@ impl TbxApp {
                         tx.clone(),
                         cancelled,
                         overwrite,
+                        app_config.clone(),
                     )
                     .await;
 
@@ -548,6 +576,7 @@ impl TbxApp {
                         tx.clone(),
                         cancelled,
                         overwrite,
+                        app_config.clone(),
                     )
                     .await;
 
@@ -575,6 +604,7 @@ impl TbxApp {
                         tx.clone(),
                         cancelled,
                         overwrite,
+                        app_config.clone(),
                     )
                     .await;
 

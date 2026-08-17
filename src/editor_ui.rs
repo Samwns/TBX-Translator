@@ -38,8 +38,8 @@ pub struct EditorState {
     pub search_query: String,
     pub status_message: Option<(bool, String)>,
     pub is_dirty: bool,
+    pub base_game_dir: Option<PathBuf>,
 }
-
 impl Default for EditorState {
     fn default() -> Self {
         Self {
@@ -49,6 +49,7 @@ impl Default for EditorState {
             search_query: String::new(),
             status_message: None,
             is_dirty: false,
+            base_game_dir: None,
         }
     }
 }
@@ -70,6 +71,7 @@ impl EditorState {
         } else {
             base_path
         };
+        self.base_game_dir = Some(parent_dir.clone());
 
         let target_dir = if engine_mode == 1 {
             let safe_name = if folder_name.trim().is_empty() { "portuguese" } else { folder_name.trim() };
@@ -177,7 +179,7 @@ impl EditorState {
         }
     }
 
-    pub fn render_ui(&mut self, ui: &mut Ui, _ctx: &Context) {
+    pub fn render_ui(&mut self, ui: &mut Ui, _ctx: &Context, tags_jogo: &mut String) {
         if self.files.is_empty() {
             ui.vertical_centered(|ui| {
                 ui.add_space(30.0);
@@ -211,7 +213,25 @@ impl EditorState {
                 .fill(Color32::from_rgb(166, 227, 161));
 
                 if ui.add(save_btn).clicked() {
-                    self.save_current_file();
+                    if self.selected_file_index.is_some() {
+                        self.save_current_file();
+                    } else {
+                        // Salvar as tags do jogo
+                        if let Some(target_dir) = &self.translation_dir {
+                            // Se for Ren'Py, o tbx_tags fica na pasta tl
+                            // Se for Unity/Godot, fica na pasta TBX_Workspace
+                            let tags_path = if target_dir.join("tbx_tags.txt").exists() || target_dir.parent().map_or(false, |p| p.ends_with("TBX_Workspace")) {
+                                target_dir.join("tbx_tags.txt")
+                            } else if let Some(parent) = target_dir.parent() {
+                                // Fallback para a pasta superior no Ren'Py (a pasta tl)
+                                parent.join("tbx_tags.txt")
+                            } else {
+                                target_dir.join("tbx_tags.txt")
+                            };
+                            let _ = std::fs::write(&tags_path, &*tags_jogo);
+                            self.status_message = Some((false, "Nomes/Tags salvas com sucesso!".to_string()));
+                        }
+                    }
                 }
 
                 if let Some((is_err, msg)) = &self.status_message {
@@ -239,6 +259,21 @@ impl EditorState {
                     ui.label(RichText::new("Arquivos de tradução").color(Color32::from_rgb(137, 180, 250)).strong());
                 });
                 ui.add_space(4.0);
+                
+                let is_tags_selected = self.selected_file_index.is_none();
+                let btn = egui::Button::new(
+                    RichText::new("Nomes/Tags do Jogo")
+                        .color(if is_tags_selected { Color32::WHITE } else { Color32::from_rgb(166, 173, 200) })
+                        .strong(),
+                )
+                .fill(if is_tags_selected { Color32::from_rgb(49, 50, 68) } else { Color32::TRANSPARENT });
+
+                if ui.add(btn).clicked() {
+                    self.selected_file_index = None;
+                    self.status_message = None;
+                }
+                ui.separator();
+                ui.add_space(4.0);
 
                 ScrollArea::vertical()
                     .id_salt("editor_files_sidebar")
@@ -264,66 +299,84 @@ impl EditorState {
             });
 
         egui::CentralPanel::default().show_inside(ui, |ui| {
+            if self.selected_file_index.is_none() {
+                ui.heading(RichText::new("Nomes e Tags Protegidas do Jogo").color(Color32::from_rgb(203, 166, 247)));
+                ui.label(RichText::new("Adicione os nomes dos personagens ou termos específicos que você NÃO quer que sejam traduzidos. Exemplo:").small());
+                ui.label(RichText::new("PlayerName\nChest\nSword of Destiny").small());
+                ui.add_space(8.0);
+                ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.add(egui::TextEdit::multiline(tags_jogo)
+                            .desired_width(ui.available_width())
+                            .font(egui::TextStyle::Monospace));
+                    });
+                return;
+            }
+
             let Some(file_idx) = self.selected_file_index else { return };
             let Some(file) = self.files.get_mut(file_idx) else { return };
 
                     let query = self.search_query.to_lowercase();
+                    let filtered_indices: Vec<usize> = file.entries.iter().enumerate().filter_map(|(idx, entry)| {
+                        if query.is_empty() || entry.original.to_lowercase().contains(&query) || entry.translated.to_lowercase().contains(&query) {
+                            Some(idx)
+                        } else {
+                            None
+                        }
+                    }).collect();
 
                     ScrollArea::vertical()
                         .id_salt("editor_dialogues_list")
                         .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                        let mut changed = false;
+                        .show_rows(ui, 120.0, filtered_indices.len(), |ui, row_range| {
+                            let mut changed = false;
 
-                        for (idx, entry) in file.entries.iter_mut().enumerate() {
-                            if !query.is_empty()
-                                && !entry.original.to_lowercase().contains(&query)
-                                && !entry.translated.to_lowercase().contains(&query)
-                            {
-                                continue;
+                            for i in row_range {
+                                let idx = filtered_indices[i];
+                                let entry = &mut file.entries[idx];
+
+                                ui.group(|ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(RichText::new(format!("#{}:", idx + 1)).color(Color32::from_rgb(108, 112, 134)).small());
+                                        if !entry.key.is_empty() {
+                                            ui.label(RichText::new(&entry.key).color(Color32::from_rgb(203, 166, 247)).small());
+                                        }
+                                    });
+
+                                    ui.horizontal(|ui| {
+                                        ui.label(RichText::new("Original:").color(Color32::from_rgb(147, 154, 183)).small());
+                                        let copy_button = egui::Button::image_and_text(
+                                            egui::Image::new(egui::include_image!("../assets/copy_icon.svg"))
+                                                .max_size(egui::vec2(12.0, 12.0)),
+                                            "Copiar",
+                                        )
+                                        .small()
+                                        .fill(Color32::from_rgb(49, 50, 68));
+                                        if ui.add(copy_button).clicked() {
+                                            ui.output_mut(|o| o.copied_text = entry.original.clone());
+                                        }
+                                    });
+                                    ui.colored_label(Color32::from_rgb(249, 226, 175), &entry.original);
+
+                                    ui.add_space(2.0);
+                                    ui.label(RichText::new("Tradução:").color(Color32::from_rgb(166, 227, 161)).small());
+                                    let resp = ui.add(
+                                        TextEdit::multiline(&mut entry.translated)
+                                            .desired_width(ui.available_width())
+                                            .desired_rows(2),
+                                    );
+                                    if resp.changed() {
+                                        changed = true;
+                                    }
+                                });
+                                ui.add_space(6.0);
                             }
 
-                            ui.group(|ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label(RichText::new(format!("#{}:", idx + 1)).color(Color32::from_rgb(108, 112, 134)).small());
-                                    if !entry.key.is_empty() {
-                                        ui.label(RichText::new(&entry.key).color(Color32::from_rgb(203, 166, 247)).small());
-                                    }
-                                });
-
-                                ui.horizontal(|ui| {
-                                    ui.label(RichText::new("Original:").color(Color32::from_rgb(147, 154, 183)).small());
-                                    let copy_button = egui::Button::image_and_text(
-                                        egui::Image::new(egui::include_image!("../assets/copy_icon.svg"))
-                                            .max_size(egui::vec2(12.0, 12.0)),
-                                        "Copiar",
-                                    )
-                                    .small()
-                                    .fill(Color32::from_rgb(49, 50, 68));
-                                    if ui.add(copy_button).clicked() {
-                                        ui.output_mut(|o| o.copied_text = entry.original.clone());
-                                    }
-                                });
-                                ui.colored_label(Color32::from_rgb(249, 226, 175), &entry.original);
-
-                                ui.add_space(2.0);
-                                ui.label(RichText::new("Tradução:").color(Color32::from_rgb(166, 227, 161)).small());
-                                let resp = ui.add(
-                                    TextEdit::multiline(&mut entry.translated)
-                                        .desired_width(ui.available_width())
-                                        .desired_rows(2),
-                                );
-                                if resp.changed() {
-                                    changed = true;
-                                }
-                            });
-                            ui.add_space(6.0);
-                        }
-
-                        if changed {
-                            self.is_dirty = true;
-                        }
-                    });
+                            if changed {
+                                self.is_dirty = true;
+                            }
+                        });
         });
     }
 }

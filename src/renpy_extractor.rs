@@ -52,200 +52,6 @@ pub fn language_identifier(folder: &str) -> String {
     identifier
 }
 
-fn integrate_language_menu(
-    game_dir: &Path,
-    language_id: &str,
-    language_label: &str,
-) -> Result<(usize, bool), String> {
-    let marker = format!("# TBX_LANGUAGE_OPTION:{language_id}");
-    let language_call = Regex::new(&format!(
-        r#"Language\s*\(\s*["']{}["']"#,
-        regex::escape(language_id)
-    ))
-    .map_err(|error| error.to_string())?;
-    let change_language_call = Regex::new(&format!(
-        r#"change_language\s*\(\s*["']{}["']"#,
-        regex::escape(language_id)
-    ))
-    .map_err(|error| error.to_string())?;
-    let any_change_language_call = Regex::new(r"renpy\s*\.\s*change_language\s*\(")
-        .map_err(|error| error.to_string())?;
-    let mut patched_menus = 0usize;
-    let mut dynamic_menu_found = false;
-
-    for entry in WalkDir::new(game_dir)
-        .into_iter()
-        .filter_entry(|entry| {
-            let name = entry.file_name().to_string_lossy();
-            name != "tl" && name != "cache" && name != "saves"
-        })
-        .filter_map(Result::ok)
-    {
-        let path = entry.path();
-        if !path.is_file()
-            || path.extension().and_then(|value| value.to_str()) != Some("rpy")
-            || path.file_name().and_then(|value| value.to_str()).is_some_and(|name| {
-                name.starts_with("tbx_") || name.starts_with("tpg_")
-            })
-        {
-            continue;
-        }
-
-        let Ok(content) = fs::read_to_string(path) else { continue };
-        if content.contains("renpy.known_languages()") {
-            dynamic_menu_found = true;
-            continue;
-        }
-        if content.contains(&marker)
-            || language_call.is_match(&content)
-            || change_language_call.is_match(&content)
-        {
-            patched_menus += 1;
-            continue;
-        }
-
-        let newline = if content.contains("\r\n") { "\r\n" } else { "\n" };
-        let lines: Vec<&str> = content.lines().collect();
-        let mut language_buttons = Vec::new();
-        for (index, line) in lines.iter().enumerate() {
-            let trimmed = line.trim_start();
-            if !trimmed.starts_with("textbutton") {
-                continue;
-            }
-            let button_indent = line.len() - trimmed.len();
-            let indent = line[..button_indent].to_string();
-            if trimmed.contains("action") && trimmed.contains("Language(") {
-                language_buttons.push((index, index, indent));
-                continue;
-            }
-
-            // Also recognize block-style buttons:
-            // textbutton "English":
-            //     action Language(None)
-            let mut end = index;
-            let mut has_language_action = false;
-            for (next_index, next_line) in lines.iter().enumerate().skip(index + 1) {
-                let next_trimmed = next_line.trim_start();
-                let next_indent = next_line.len() - next_trimmed.len();
-                if !next_trimmed.is_empty() && next_indent <= button_indent {
-                    break;
-                }
-                end = next_index;
-                if next_trimmed.starts_with("action") && next_trimmed.contains("Language(") {
-                    has_language_action = true;
-                }
-            }
-            if has_language_action {
-                language_buttons.push((index, end, indent));
-            }
-        }
-        let mut insertions: Vec<(usize, String)> = Vec::new();
-        for (position, (_, end, indent)) in language_buttons.iter().enumerate() {
-            let next_is_same_group = language_buttons.get(position + 1).is_some_and(|next| {
-                next.0 <= *end + 2 && next.2.as_str() == indent.as_str()
-            });
-            if !next_is_same_group {
-                insertions.push((
-                    *end,
-                    format!(
-                        "{indent}{marker}{newline}{indent}textbutton \"{}\" action Language(\"{}\"){newline}",
-                        escape_renpy(language_label),
-                        escape_renpy(language_id)
-                    ),
-                ));
-            }
-        }
-
-        // Some games implement their language selector as a regular Ren'Py
-        // `menu` whose choices call `renpy.change_language(...)`. Find each
-        // choice block and append the new language to the same group.
-        let mut language_choices: Vec<(usize, usize, String)> = Vec::new();
-        for (action_index, action_line) in lines.iter().enumerate() {
-            if !any_change_language_call.is_match(action_line) {
-                continue;
-            }
-            let action_trimmed = action_line.trim_start();
-            let action_indent = action_line.len() - action_trimmed.len();
-            for choice_index in (0..action_index).rev() {
-                let choice_line = lines[choice_index];
-                let choice_trimmed = choice_line.trim_start();
-                if choice_trimmed.is_empty() {
-                    continue;
-                }
-                let choice_indent_len = choice_line.len() - choice_trimmed.len();
-                if choice_indent_len >= action_indent {
-                    continue;
-                }
-                if choice_trimmed.ends_with(':')
-                    && (choice_trimmed.starts_with('"') || choice_trimmed.starts_with('\''))
-                {
-                    let mut end = choice_index;
-                    for (next_index, next_line) in lines.iter().enumerate().skip(choice_index + 1) {
-                        let next_trimmed = next_line.trim_start();
-                        let next_indent = next_line.len() - next_trimmed.len();
-                        if !next_trimmed.is_empty() && next_indent <= choice_indent_len {
-                            break;
-                        }
-                        end = next_index;
-                    }
-                    language_choices.push((
-                        choice_index,
-                        end,
-                        choice_line[..choice_indent_len].to_string(),
-                    ));
-                }
-                break;
-            }
-        }
-        language_choices.sort_by_key(|choice| choice.0);
-        language_choices.dedup_by_key(|choice| choice.0);
-        for (position, (_, end, indent)) in language_choices.iter().enumerate() {
-            let next_is_same_group = language_choices.get(position + 1).is_some_and(|next| {
-                next.0 <= *end + 2 && next.2.as_str() == indent.as_str()
-            });
-            if !next_is_same_group {
-                insertions.push((
-                    *end,
-                    format!(
-                        "{indent}{marker}{newline}{indent}\"{}\":{newline}{indent}    $ renpy.change_language(\"{}\"){newline}",
-                        escape_renpy(language_label),
-                        escape_renpy(language_id)
-                    ),
-                ));
-            }
-        }
-
-        if insertions.is_empty() {
-            continue;
-        }
-
-        let mut rewritten = String::with_capacity(content.len() + insertions.len() * 160);
-        for (index, line) in lines.iter().enumerate() {
-            rewritten.push_str(line);
-            rewritten.push_str(newline);
-            for (_, snippet) in insertions.iter().filter(|(end, _)| *end == index) {
-                rewritten.push_str(snippet);
-                patched_menus += 1;
-            }
-        }
-
-        let backup_name = format!(
-            "{}.tbx_backup",
-            path.file_name().and_then(|value| value.to_str()).unwrap_or("screen.rpy")
-        );
-        let backup = path.with_file_name(backup_name);
-        if !backup.exists() {
-            fs::copy(path, &backup).map_err(|error| {
-                format!("Falha ao criar backup de {}: {error}", path.display())
-            })?;
-        }
-        fs::write(path, rewritten)
-            .map_err(|error| format!("Falha ao atualizar {}: {error}", path.display()))?;
-    }
-
-    Ok((patched_menus, dynamic_menu_found))
-}
-
 fn split_renpy_text(
     text: &str,
     control_re: &Regex,
@@ -332,6 +138,7 @@ pub async fn extract_texts(
     tx: std::sync::mpsc::Sender<UiMsg>,
     cancelled: Arc<AtomicBool>,
     overwrite: bool,
+    config: crate::app_config::AppConfig,
 ) -> Result<(), String> {
     let (_base_dir, game_dir) = resolve_renpy_paths(executable)?;
 
@@ -460,6 +267,7 @@ pub async fn extract_texts(
     let mut to_translate_indices: Vec<usize> = Vec::new();
     let mut resolved_translations: Vec<Option<String>> = vec![None; dialogues.len()];
     let mut was_cancelled = false;
+    let ignored_tags = config.get_active_tags(Some(game_dir.join("tl").join("tbx_tags.txt")));
 
     for (idx, (text, _, _)) in dialogues.iter().enumerate() {
         if let Some(std_trans) = crate::dictionary::lookup(text, tgt_code) {
@@ -509,7 +317,7 @@ pub async fn extract_texts(
             }
         }
 
-        let translated = api::translate_batch_concurrent(&client, &texts, src_code, tgt_code, threads as usize).await
+        let translated = api::translate_batch_concurrent(&client, &texts, src_code, tgt_code, threads as usize, config.usar_traducao_pivo, &ignored_tags).await
             .unwrap_or_else(|_| vec![]);
 
         for (i, &orig_idx) in chunk_indices.iter().enumerate() {
@@ -563,50 +371,20 @@ pub async fn extract_texts(
     // safe selector and lists every language already known by Ren'Py.
     let boot_script = game_dir.join("tbx_boot.rpy");
     let language_label_name = api::get_lang_name(api::get_lang_code(target_lang));
-    let (patched_menus, dynamic_menu_found) =
-        match integrate_language_menu(&game_dir, &language_id, language_label_name) {
-            Ok(result) => result,
-            Err(error) => {
-                let _ = tx.send(UiMsg::Log(format!(
-                    "[Ren'Py Aviso] Não foi possível integrar o menu original: {error}. Usando seletor complementar."
-                )));
-                (0, false)
-            }
-        };
-    let use_fallback_selector = patched_menus == 0 && !dynamic_menu_found;
-    if dynamic_menu_found {
-        let _ = tx.send(UiMsg::Log(format!(
-            "[Ren'Py] O menu usa renpy.known_languages(); '{}' será listado automaticamente.",
-            language_id
-        )));
-    } else if patched_menus > 0 {
-        let _ = tx.send(UiMsg::Log(format!(
-            "[Ren'Py] Idioma '{}' integrado em {} lista(s) de idiomas existente(s).",
-            language_id, patched_menus
-        )));
-    } else {
-        let _ = tx.send(UiMsg::Log(
-            "[Ren'Py] O jogo não possui lista de idiomas editável; seletor complementar instalado.".to_string(),
-        ));
-    }
+    
+    let _ = tx.send(UiMsg::Log(
+        "[Ren'Py] Instalando Mod Universal de Idiomas (Força Bruta)...".to_string(),
+    ));
 
-    let language_label = escape_renpy(language_label_name);
     let escaped_language_id = escape_renpy(&language_id);
-    let fallback_flag = "True"; // Sempre forçar a exibição do menu de idiomas
     let boot_content = format!(
         r##"init 999 python:
-    tbx_language_labels = dict([("{0}", "{1}")])
-    tbx_use_language_overlay = {2}
-
     try:
         if getattr(persistent, "tbx_language_set", None) != "{0}":
             _preferences.language = "{0}"
             persistent.tbx_language_set = "{0}"
     except:
         pass
-
-    def tbx_language_name(language):
-        return tbx_language_labels.get(language, language.replace("_", " ").title())
 
     try:
         tbx_previous_say_filter = config.say_menu_text_filter
@@ -631,52 +409,77 @@ pub async fn extract_texts(
         renpy.input = tbx_input
     except:
         pass
-
-    try:
-        if tbx_use_language_overlay and "tbx_language_access" not in config.overlay_screens:
-            config.overlay_screens.append("tbx_language_access")
-    except:
-        pass
-
-screen tbx_language_access():
-    zorder 9998
-    
-    key "l" action ShowMenu("tbx_language_selector")
-    key "L" action ShowMenu("tbx_language_selector")
-
-    if main_menu or getattr(store, '_menu', False):
-        textbutton _("Idioma"):
-            action ShowMenu("tbx_language_selector")
-            xalign 0.98
-            yalign 0.02
-            text_size 24
-            text_outlines [ (1, "#000", 0, 0) ]
-
-screen tbx_language_selector():
-    modal True
-    zorder 9999
-
-    add Solid("#00000099")
-
-    frame:
-        align (0.5, 0.5)
-        padding (30, 24)
-
-        vbox:
-            spacing 10
-            label _("Idioma") xalign 0.5
-            textbutton _("Original") action [Language(None), Hide("tbx_language_selector")] xalign 0.5
-
-            for tbx_lang in sorted(renpy.known_languages()):
-                textbutton tbx_language_name(tbx_lang) action [Language(tbx_lang), Hide("tbx_language_selector")] xalign 0.5
-
-            textbutton _("Fechar") action Hide("tbx_language_selector") xalign 0.5
 "##,
         escaped_language_id,
-        language_label,
-        fallback_flag,
     );
     let _ = fs::write(boot_script, boot_content);
+
+    let mod_script = game_dir.join("99_tbx_language_manager.rpy");
+    let mod_content = r##"# ==========================================
+# MOD UNIVERSAL DE IDIOMAS (FORÇA BRUTA)
+# ==========================================
+
+init 999 python:
+    # 1. Pega os idiomas escondidos no jogo
+    def obter_idiomas():
+        langs = list(renpy.known_languages())
+        if None not in langs:
+            langs.insert(0, None)
+        return langs
+
+    # 2. Cria uma camada invisível e indestrutível por cima de tudo no motor
+    if "camada_idioma_mod" not in config.layers:
+        config.layers.append("camada_idioma_mod")
+
+    # 3. Injeta o botão à força na camada indestrutível o tempo todo
+    def manter_botao_ativo():
+        if not renpy.get_screen("botao_flutuante_idioma", layer="camada_idioma_mod"):
+            renpy.show_screen("botao_flutuante_idioma", _layer="camada_idioma_mod")
+            
+    # O motor vai checar essa injeção a cada clique que você der
+    config.interact_callbacks.append(manter_botao_ativo)
+
+    # 4. Mantém o atalho de teclado 'L' como redundância
+    config.keymap["abrir_menu_idioma"] = ["l", "L"]
+    config.underlay.append(renpy.Keymap(abrir_menu_idioma=lambda: renpy.run(ShowMenu("menu_idiomas_universal"))))
+
+# A TELA DO BOTÃO
+screen botao_flutuante_idioma():
+    # Ele só vai aparecer se você estiver no Menu Principal ou em submenus
+    if main_menu or getattr(store, '_menu', False):
+        textbutton "🌐 Idioma":
+            align (0.98, 0.02)
+            text_size 22
+            action ShowMenu("menu_idiomas_universal")
+
+# O MENU DE IDIOMAS EM SI
+screen menu_idiomas_universal():
+    tag menu
+    modal True
+    add "#000a"
+    
+    frame:
+        align (0.5, 0.5)
+        padding (40, 40)
+        
+        vbox:
+            spacing 20
+            text "Selecione o Idioma / Language" size 30 xalign 0.5 bold True
+            
+            for lang in obter_idiomas():
+                $ nome = lang.capitalize() if lang else "Original / Default"
+                textbutton nome:
+                    xalign 0.5
+                    text_size 25
+                    action [Language(lang), Return()]
+            
+            null height 20
+            textbutton "Fechar / Close":
+                xalign 0.5
+                text_size 25
+                action Return()
+"##;
+    let _ = fs::write(&mod_script, mod_content);
 
     // Cleanup temp
     let _ = fs::remove_file(game_dir.join("tbx_dumper.rpy"));

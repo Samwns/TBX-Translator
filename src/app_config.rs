@@ -22,6 +22,9 @@ pub struct AppConfig {
     pub preservar_nomes_renpy: bool,
     pub traduzir_nomes_personagens_renpy: bool,
     pub threads_ativas: u32,
+    pub usa_tags_personalizadas: bool,
+    pub usa_tags_jogo: bool,
+    pub usar_traducao_pivo: bool,
     pub efeitos_sonoros: bool,
     pub ui_language: String, // "pt_BR" or "en_US"
     /// Versão cujo changelog inicial o usuário já confirmou.
@@ -51,6 +54,9 @@ impl Default for AppConfig {
             traduzir_nomes_personagens_renpy: false,
             threads_ativas: 3,
             efeitos_sonoros: true,
+            usar_traducao_pivo: false,
+            usa_tags_personalizadas: true,
+            usa_tags_jogo: true,
             ui_language: "pt_BR".into(),
             ultima_versao_exibida: String::new(),
             godot_injection_mode: "auto".into(),
@@ -98,7 +104,10 @@ impl AppConfig {
         if let Some(v) = props.get("preservarNomesRenpy")              { cfg.preservar_nomes_renpy = v == "true"; }
         if let Some(v) = props.get("traduzirNomesPersonagensRenpy")    { cfg.traduzir_nomes_personagens_renpy = v == "true"; }
         if let Some(v) = props.get("threadsAtivas")                    { cfg.threads_ativas = v.parse::<u32>().unwrap_or(3).clamp(1, 4); }
-        if let Some(v) = props.get("efeitosSonoros")                   { cfg.efeitos_sonoros = v != "false"; }
+        if let Some(v) = props.get("efeitosSonoros")                   { cfg.efeitos_sonoros = v == "true"; }
+        if let Some(v) = props.get("usarTraducaoPivo")                 { cfg.usar_traducao_pivo = v == "true"; }
+        if let Some(v) = props.get("usaTagsPersonalizadas")            { cfg.usa_tags_personalizadas = v == "true"; }
+        if let Some(v) = props.get("usaTagsJogo")                      { cfg.usa_tags_jogo = v == "true"; }
         if let Some(v) = props.get("uiLanguage")                       { cfg.ui_language = v.clone(); }
         if let Some(v) = props.get("ultimaVersaoExibida")              { cfg.ultima_versao_exibida = v.clone(); }
         if let Some(v) = props.get("godotInjectionMode")               { cfg.godot_injection_mode = v.clone(); }
@@ -132,10 +141,46 @@ impl AppConfig {
         let _ = writeln!(file, "traduzirNomesPersonagensRenpy={}", self.traduzir_nomes_personagens_renpy);
         let _ = writeln!(file, "threadsAtivas={}", self.threads_ativas);
         let _ = writeln!(file, "efeitosSonoros={}", self.efeitos_sonoros);
+        let _ = writeln!(file, "usarTraducaoPivo={}", self.usar_traducao_pivo);
+        let _ = writeln!(file, "usaTagsPersonalizadas={}", self.usa_tags_personalizadas);
+        let _ = writeln!(file, "usaTagsJogo={}", self.usa_tags_jogo);
         let _ = writeln!(file, "uiLanguage={}", self.ui_language);
         let _ = writeln!(file, "ultimaVersaoExibida={}", self.ultima_versao_exibida);
         let _ = writeln!(file, "godotInjectionMode={}", self.godot_injection_mode);
         let _ = writeln!(file, "godotForceLocale={}", self.godot_force_locale);
         let _ = writeln!(file, "themeId={}", self.theme_id);
+    }
+
+    pub fn get_active_tags(&self, game_tags_file: Option<std::path::PathBuf>) -> Vec<String> {
+        let mut all_tags = Vec::new();
+        let mut load_tags = |path: &str| {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                for line in content.lines() {
+                    let t = line.trim();
+                    if !t.is_empty() {
+                        all_tags.push(t.to_string());
+                    }
+                }
+            }
+        };
+
+        // Padrao
+        load_tags("tags_padrao.txt");
+
+        // Personalizadas
+        if self.usa_tags_personalizadas {
+            load_tags("tags_personalizadas.txt");
+        }
+
+        // Jogo
+        if self.usa_tags_jogo {
+            if let Some(path) = game_tags_file {
+                if let Some(s) = path.to_str() {
+                    load_tags(s);
+                }
+            }
+        }
+
+        all_tags
     }
 }
