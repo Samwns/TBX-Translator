@@ -70,11 +70,18 @@ EOF
     printf '\n**Full Changelog**: %s\n' "$CHANGELOG_URL"
 } > "$OUTPUT_DIR/release-body.md"
 
+CHANGELOG_TEXT=$(extract_changelog)
+MAX_LEN=1500
+if [[ ${#CHANGELOG_TEXT} -gt $MAX_LEN ]]; then
+    CHANGELOG_TEXT="${CHANGELOG_TEXT:0:$MAX_LEN}...
+[Leia o registro completo no GitHub](https://github.com/Samwns/TBX-Translator/releases/latest)"
+fi
+
 {
     printf '# [**%s**](https://github.com/Samwns/TBX-Translator/releases/latest)\n\n' "$RELEASE_NAME"
     printf 'update/changes:\n'
     printf '### Resumo das mudanças\n\n'
-    extract_changelog
+    printf '%s\n' "$CHANGELOG_TEXT"
     printf '\n\n@Member @here\n'
 } > "$OUTPUT_DIR/discord-update.md"
 

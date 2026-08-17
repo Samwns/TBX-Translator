@@ -638,13 +638,20 @@ pub async fn extract_texts(
     except:
         pass
 
+init 999:
+    key "l" action ShowMenu("tbx_language_selector")
+    key "L" action ShowMenu("tbx_language_selector")
+
 screen tbx_language_access():
     zorder 9998
 
-    if main_menu or renpy.get_screen("preferences") or renpy.get_screen("options"):
-        textbutton _("Language") action Show("tbx_language_selector"):
+    if main_menu or getattr(store, '_menu', False):
+        textbutton _("Idioma"):
+            action ShowMenu("tbx_language_selector")
             xalign 0.98
             yalign 0.02
+            text_size 24
+            text_outlines [ (1, "#000", 0, 0) ]
 
 screen tbx_language_selector():
     modal True
@@ -658,13 +665,13 @@ screen tbx_language_selector():
 
         vbox:
             spacing 10
-            label _("Language")
-            textbutton _("Original") action [Language(None), Hide("tbx_language_selector")]
+            label _("Idioma") xalign 0.5
+            textbutton _("Original") action [Language(None), Hide("tbx_language_selector")] xalign 0.5
 
             for tbx_lang in sorted(renpy.known_languages()):
-                textbutton tbx_language_name(tbx_lang) action [Language(tbx_lang), Hide("tbx_language_selector")]
+                textbutton tbx_language_name(tbx_lang) action [Language(tbx_lang), Hide("tbx_language_selector")] xalign 0.5
 
-            textbutton _("Close") action Hide("tbx_language_selector")
+            textbutton _("Fechar") action Hide("tbx_language_selector") xalign 0.5
 "##,
         escaped_language_id,
         language_label,

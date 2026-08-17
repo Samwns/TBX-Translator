@@ -4,6 +4,7 @@ use std::{
     collections::HashMap,
     sync::{Mutex, OnceLock},
 };
+use regex::Regex;
 
 fn global_request_limiter() -> &'static tokio::sync::Semaphore {
     static LIMITER: OnceLock<tokio::sync::Semaphore> = OnceLock::new();
@@ -212,6 +213,18 @@ async fn translate_preserving_lines(
     Ok(translated)
 }
 
+fn find_next_markup(text: &str) -> Option<(usize, usize)> {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| Regex::new(r"(?x)
+        \[[^\]]*\] |
+        \{[^}]*\} |
+        <[^>]*> |
+        %\([^)]+\)[sdf] |
+        %[sdf]
+    ").unwrap());
+    re.find(text).map(|m| (m.start(), m.end()))
+}
+
 /// Translate only visible text and copy Godot/RichText BBCode tags byte for
 /// byte. Example: `[wave][color=pink]Hello[/color][/wave]` sends only `Hello`
 /// to the service and reconstructs the original tag structure afterwards.
@@ -227,8 +240,10 @@ async fn translate_preserving_markup(
 
     let mut output = String::with_capacity(text.len());
     let mut cursor = 0usize;
-    while let Some(relative_open) = text[cursor..].find('[') {
+    while let Some((relative_open, relative_close)) = find_next_markup(&text[cursor..]) {
         let open = cursor + relative_open;
+        let close = cursor + relative_close;
+        
         let visible = &text[cursor..open];
         for piece in split_for_translation(visible) {
             if !piece.is_empty() {
@@ -236,13 +251,6 @@ async fn translate_preserving_markup(
             }
         }
 
-        let Some(relative_close) = text[open..].find(']') else {
-            for piece in split_for_translation(&text[open..]) {
-                output.push_str(&translate_visible_segment(client, &piece, from_lang, to_lang).await?);
-            }
-            return Ok(output);
-        };
-        let close = open + relative_close + 1;
         output.push_str(&text[open..close]);
         cursor = close;
     }
@@ -299,18 +307,15 @@ fn prepare_packed_item(index: usize, text: &str) -> PackedItem {
     let mut tags = Vec::new();
     let mut cursor = 0usize;
 
-    while let Some(relative_open) = core[cursor..].find('[') {
+    while let Some((relative_open, relative_close)) = find_next_markup(&core[cursor..]) {
         let open = cursor + relative_open;
+        let close = cursor + relative_close;
+        
         masked.push_str(&core[cursor..open]);
-        let Some(relative_close) = core[open..].find(']') else {
-            masked.push_str(&core[open..]);
-            cursor = core.len();
-            break;
-        };
-        let close = open + relative_close + 1;
         let token = format!("⟦TBXT{index:04}_{:03}⟧", tags.len());
         tags.push((token.clone(), core[open..close].to_string()));
         masked.push_str(&token);
+        
         cursor = close;
     }
     masked.push_str(&core[cursor..]);
