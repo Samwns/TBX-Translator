@@ -638,12 +638,11 @@ pub async fn extract_texts(
     except:
         pass
 
-init 999:
-    key "l" action ShowMenu("tbx_language_selector")
-    key "L" action ShowMenu("tbx_language_selector")
-
 screen tbx_language_access():
     zorder 9998
+    
+    key "l" action ShowMenu("tbx_language_selector")
+    key "L" action ShowMenu("tbx_language_selector")
 
     if main_menu or getattr(store, '_menu', False):
         textbutton _("Idioma"):
