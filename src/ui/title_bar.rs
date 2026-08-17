@@ -165,14 +165,9 @@ impl TbxApp {
                     }
 
                     ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(
-                            RichText::new(format!(
-                                "v{} | by samwns",
-                                crate::updater::current_version()
-                            ))
-                            .color(theme.overlay0)
-                            .small(),
-                        );
+                        let build_num = option_env!("TBX_BUILD_NUMBER").unwrap_or("");
+                        let build_suffix = if build_num.is_empty() { String::new() } else { format!(" (build {})", build_num) };
+                        ui.label(RichText::new(format!("v{}{build_suffix} | by samwns", env!("CARGO_PKG_VERSION"))).color(theme.overlay0).small());
                         ui.add_space(6.0);
 
                         let update_available = self

@@ -148,10 +148,23 @@ init python:
                                     content = rf.read()
                                     import base64
                                     pat = base64.b64decode(b'X1woXHMqKFtcJ1x4MjJdKSguKj8pXDFccypcKQ==').decode('utf-8')
-                                    matches = re.findall(pat, content)
-                                    for quote, match in matches:
-                                        if match.strip():
-                                            write_entry(file, 'interface', match)
+                                    for quote, match in re.findall(pat, content):
+                                        if match.strip(): write_entry(file, 'interface', match)
+                                    for m in re.finditer(r'(?i)\b__\(\s*([\'"])(.*?)\1', content):
+                                        if m.group(2).strip(): write_entry(file, 'interface', m.group(2))
+                                    
+                                    for m in re.finditer(r'(?i)\btext\s+([\'"])(.*?)\1', content):
+                                        if m.group(2).strip(): write_entry(file, 'interface', m.group(2))
+                                    for m in re.finditer(r'(?i)\btextbutton\s+([\'"])(.*?)\1', content):
+                                        if m.group(2).strip(): write_entry(file, 'interface', m.group(2))
+                                    for m in re.finditer(r'(?i)\blabel\s+([\'"])(.*?)\1', content):
+                                        if m.group(2).strip(): write_entry(file, 'interface', m.group(2))
+                                    for m in re.finditer(r'(?i)\btooltip\s+([\'"])(.*?)\1', content):
+                                        if m.group(2).strip(): write_entry(file, 'interface', m.group(2))
+                                    for m in re.finditer(r'(?i)\bname\s*(?:=|:)\s*([\'"])(.*?)\1', content):
+                                        if m.group(2).strip(): write_entry(file, 'interface', m.group(2))
+                                    for m in re.finditer(r'(?i)\bdescription\s*(?:=|:)\s*([\'"])(.*?)\1', content):
+                                        if m.group(2).strip(): write_entry(file, 'interface', m.group(2))
                             except:
                                 pass
 
