@@ -592,7 +592,7 @@ pub async fn extract_texts(
 
     let language_label = escape_renpy(language_label_name);
     let escaped_language_id = escape_renpy(&language_id);
-    let fallback_flag = if use_fallback_selector { "True" } else { "False" };
+    let fallback_flag = "True"; // Sempre forçar a exibição do menu de idiomas
     let boot_content = format!(
         r##"init 999 python:
     tbx_language_labels = dict([("{0}", "{1}")])
