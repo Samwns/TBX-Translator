@@ -401,7 +401,7 @@ impl TbxApp {
                                     let card_stroke = if is_active {
                                         egui::Stroke::new(2.0, theme.accent)
                                     } else {
-                                        egui::Stroke::new(1.0, theme.border)
+                                        egui::Stroke::new(1.0_f32, theme.border)
                                     };
 
                                     let (card_rect, card_resp) = ui.allocate_exact_size(

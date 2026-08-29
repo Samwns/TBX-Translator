@@ -158,7 +158,7 @@ pub fn toggle_ui(ui: &mut egui::Ui, on: &mut bool, text: &str) -> egui::Response
             let circle_x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), how_on);
             let center = egui::pos2(circle_x, rect.center().y);
 
-            ui.painter().circle(center, 0.75 * radius, ui.visuals().window_fill(), Stroke::new(1.0, ui.visuals().widgets.inactive.bg_stroke.color));
+            ui.painter().circle(center, 0.75 * radius, ui.visuals().window_fill(), Stroke::new(1.0_f32, ui.visuals().widgets.inactive.bg_stroke.color));
         }
 
         ui.label(text);
@@ -1194,7 +1194,7 @@ impl eframe::App for TbxApp {
                 color: Color32::from_black_alpha(150),
             }
         };
-        let outer_stroke = if is_maximized { Stroke::NONE } else { Stroke::new(1.0, theme.border) };
+        let outer_stroke = if is_maximized { Stroke::NONE } else { Stroke::new(1.0_f32, theme.border) };
 
         // Custom frameless window root container
         egui::CentralPanel::default()
@@ -1341,28 +1341,28 @@ pub fn setup_theme_visuals(ctx: &Context, theme: &crate::themes::AppTheme) {
     visuals.override_text_color = Some(theme.text);
     visuals.panel_fill = theme.base;
     visuals.window_fill = theme.mantle;
-    visuals.window_stroke = Stroke::new(1.0, theme.border);
+    visuals.window_stroke = Stroke::new(1.0_f32, theme.border);
     visuals.window_rounding = Rounding::same(8.0);
 
     // Widget styling
     visuals.widgets.noninteractive.bg_fill = theme.mantle;
-    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, theme.surface0);
+    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, theme.surface0);
     visuals.widgets.noninteractive.rounding = Rounding::same(6.0);
 
     visuals.widgets.inactive.bg_fill = theme.surface0;
-    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, theme.surface1);
+    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, theme.surface1);
     visuals.widgets.inactive.rounding = Rounding::same(6.0);
 
     visuals.widgets.hovered.bg_fill = theme.surface1;
-    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, theme.accent);
+    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, theme.accent);
     visuals.widgets.hovered.rounding = Rounding::same(6.0);
 
     visuals.widgets.active.bg_fill = theme.surface2;
-    visuals.widgets.active.bg_stroke = Stroke::new(1.0, theme.accent2);
+    visuals.widgets.active.bg_stroke = Stroke::new(1.0_f32, theme.accent2);
     visuals.widgets.active.rounding = Rounding::same(6.0);
 
     visuals.selection.bg_fill = theme.accent;
-    visuals.selection.stroke = Stroke::new(1.0, theme.base);
+    visuals.selection.stroke = Stroke::new(1.0_f32, theme.base);
 
     ctx.set_visuals(visuals);
 }

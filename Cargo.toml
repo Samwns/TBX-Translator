@@ -1,6 +1,6 @@
 [package]
 name = "tbx-translator"
-version = "0.0.3"
+version = "0.0.3-alpha"
 edition = "2021"
 default-run = "tbx-translator"
 authors = ["samwns"]
