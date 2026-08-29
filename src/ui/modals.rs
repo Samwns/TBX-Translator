@@ -399,7 +399,7 @@ impl TbxApp {
                                         theme.mantle
                                     };
                                     let card_stroke = if is_active {
-                                        egui::Stroke::new(2.0, theme.accent)
+                                        egui::Stroke::new(2.0_f32, theme.accent)
                                     } else {
                                         egui::Stroke::new(1.0_f32, theme.border)
                                     };
