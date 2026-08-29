@@ -35,6 +35,10 @@ pub struct AppConfig {
     pub godot_force_locale: String,
     /// ID do tema visual ativo.
     pub theme_id: String,
+    /// Se true, instala BepInEx 6 Bleeding Edge ao invés da v5
+    pub usar_bepinex_6: bool,
+    /// Se true, a fonte global substitui TODAS as fontes do jogo. Se false, age apenas como fallback.
+    pub substituir_todas_fontes_unity: bool,
 }
 
 impl Default for AppConfig {
@@ -62,6 +66,8 @@ impl Default for AppConfig {
             godot_injection_mode: "auto".into(),
             godot_force_locale: "en".into(),
             theme_id: "catppuccin_mocha".into(),
+            usar_bepinex_6: false,
+            substituir_todas_fontes_unity: false,
         }
     }
 }
@@ -113,6 +119,8 @@ impl AppConfig {
         if let Some(v) = props.get("godotInjectionMode")               { cfg.godot_injection_mode = v.clone(); }
         if let Some(v) = props.get("godotForceLocale")                  { cfg.godot_force_locale = v.clone(); }
         if let Some(v) = props.get("themeId")                           { cfg.theme_id = v.clone(); }
+        if let Some(v) = props.get("usarBepinex6")                     { cfg.usar_bepinex_6 = v.to_lowercase() == "true"; }
+        if let Some(v) = props.get("substituirTodasFontesUnity")       { cfg.substituir_todas_fontes_unity = v.to_lowercase() == "true"; }
 
         cfg
     }
@@ -149,34 +157,44 @@ impl AppConfig {
         let _ = writeln!(file, "godotInjectionMode={}", self.godot_injection_mode);
         let _ = writeln!(file, "godotForceLocale={}", self.godot_force_locale);
         let _ = writeln!(file, "themeId={}", self.theme_id);
+        let _ = writeln!(file, "usarBepinex6={}", self.usar_bepinex_6);
+        let _ = writeln!(file, "substituirTodasFontesUnity={}", self.substituir_todas_fontes_unity);
     }
 
-    pub fn get_active_tags(&self, game_tags_file: Option<std::path::PathBuf>) -> Vec<String> {
+    pub fn get_active_tags(&self, game_tags_file: Option<std::path::PathBuf>, engine_mode: u32) -> Vec<String> {
         let mut all_tags = Vec::new();
-        let mut load_tags = |path: &str| {
+        let load_tags = |path: &str, tags_vec: &mut Vec<String>| {
             if let Ok(content) = std::fs::read_to_string(path) {
                 for line in content.lines() {
                     let t = line.trim();
                     if !t.is_empty() {
-                        all_tags.push(t.to_string());
+                        tags_vec.push(t.to_string());
                     }
                 }
             }
         };
 
-        // Padrao
-        load_tags("tags_padrao.txt");
+        // Padrao (Engine Specific)
+        let default_tags = match engine_mode {
+            0 => vec!["[name]", "[player_name]", "{b}", "{/b}", "{i}", "{/i}", "{u}", "{/u}", "{color}", "{/color}", "{w}", "{p}", "{nw}"],
+            1 => vec!["<b>", "</b>", "<i>", "</i>", "<u>", "</u>", "<color>", "</color>", "<size>", "</size>"],
+            2 => vec!["[b]", "[/b]", "[i]", "[/i]", "[u]", "[/u]", "[color]", "[/color]"],
+            _ => vec![],
+        };
+        for t in default_tags {
+            all_tags.push(t.to_string());
+        }
 
         // Personalizadas
         if self.usa_tags_personalizadas {
-            load_tags("tags_personalizadas.txt");
+            load_tags("tags_personalizadas.txt", &mut all_tags);
         }
 
         // Jogo
         if self.usa_tags_jogo {
             if let Some(path) = game_tags_file {
                 if let Some(s) = path.to_str() {
-                    load_tags(s);
+                    load_tags(s, &mut all_tags);
                 }
             }
         }

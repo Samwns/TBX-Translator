@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use tokio::io::AsyncBufReadExt;
 
 use crate::api;
 use crate::ui::UiMsg;
@@ -50,28 +51,30 @@ pub fn output_folder(executable: &str, translation_folder: &str, target_lang_nam
 /// UnityPy complements AssetsTools.NET/UABEA for bundles and Addressables which
 /// are not always discoverable as a normal `.assets` file. It is optional so a
 /// packaged application remains usable without a Python runtime.
-fn extract_with_unitypy(
+async fn extract_with_unitypy(
     data_dir: &Path,
     extractor_dir: &Path,
     output_json: &Path,
     tx: &std::sync::mpsc::Sender<UiMsg>,
+    cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) -> Result<Option<Vec<String>>, String> {
+    use tokio::io::AsyncBufReadExt;
     let script = extractor_dir.join("unitypy_extract.py");
     if !script.is_file() {
         return Ok(None);
     }
 
     let python = if cfg!(windows) { "python" } else { "python3" };
-    let unitypy_checkout = extractor_dir
+    let third_party_dir = extractor_dir
         .parent()
-        .map(|root| root.join("third_party").join("UnityPy"));
+        .map(|root| root.join("third_party"));
     let mut command = crate::paths::hidden_command(python);
     command.arg(&script).arg(data_dir).arg(output_json);
     // A local checkout wins over a globally installed UnityPy. Python keeps its
     // normal dependency resolution, so a missing dependency is reported in the
     // existing non-fatal fallback message.
-    if let Some(checkout) = unitypy_checkout.filter(|path| path.is_dir()) {
-        let mut paths = vec![checkout];
+    if let Some(tp_dir) = third_party_dir.filter(|path| path.is_dir()) {
+        let mut paths = vec![tp_dir.clone(), tp_dir.join("UnityPy")];
         if let Some(existing) = std::env::var_os("PYTHONPATH") {
             paths.extend(std::env::split_paths(&existing));
         }
@@ -174,24 +177,41 @@ pub async fn extract_texts(
     
     let _ = tx.send(UiMsg::Log(format!("Chamando extrator C# (modo extract)...")));
     
-    let mut command = get_unity_extractor_command()?;
-    let output = command
-        .arg("extract")
-        .arg(&data_dir)
-        .arg(&extracted_json)
-        .output()
-        .map_err(|e| format!("Falha ao executar extrator Unity: {}", e))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        if line.contains("Restore succeeded") || line.contains("Build succeeded") || line.contains("Build started") || line.contains("MSBuild version") { continue; }
-        if line.contains("warning CS") { continue; }
-        let _ = tx.send(UiMsg::Log(line.to_string()));
+    let mut std_command = get_unity_extractor_command()?;
+    std_command.arg("extract").arg(&data_dir).arg(&extracted_json);
+    std_command.stdout(std::process::Stdio::piped());
+    std_command.stderr(std::process::Stdio::piped());
+    
+    let mut command = tokio::process::Command::from(std_command);
+    let mut child = command.spawn().map_err(|e| format!("Falha ao iniciar extrator Unity: {}", e))?;
+    
+    let stdout = child.stdout.take().unwrap();
+    let mut stdout_reader = tokio::io::BufReader::new(stdout).lines();
+    
+    loop {
+        if cancelled.load(Ordering::SeqCst) {
+            let _ = child.kill().await;
+            return Err("Cancelado pelo usuário.".into());
+        }
+        tokio::select! {
+            line = stdout_reader.next_line() => {
+                match line {
+                    Ok(Some(l)) => {
+                        if !l.contains("Restore succeeded") && !l.contains("Build succeeded") && !l.contains("Build started") && !l.contains("MSBuild version") && !l.contains("warning CS") {
+                            let _ = tx.send(UiMsg::Log(l));
+                        }
+                    },
+                    Ok(None) => break,
+                    Err(_) => break,
+                }
+            }
+            _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
+        }
     }
     
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Erro no extrator C#: {}", stderr));
+    let status = child.wait().await.map_err(|e| e.to_string())?;
+    if !status.success() {
+        return Err(format!("Erro no extrator C#: falhou com código {:?}", status.code()));
     }
     
     if !extracted_json.exists() {
@@ -202,7 +222,7 @@ pub async fn extract_texts(
     let mut texts: Vec<String> = serde_json::from_str(&json_content).map_err(|e| format!("Erro ao ler JSON: {}", e))?;
 
     let _ = tx.send(UiMsg::Log("Complementando bundles/Addressables com UnityPy...".into()));
-    if let Some(unitypy_texts) = extract_with_unitypy(&data_dir, &extractor_dir, &unitypy_json, &tx)? {
+    if let Some(unitypy_texts) = extract_with_unitypy(&data_dir, &extractor_dir, &unitypy_json, &tx, cancelled.clone()).await? {
         let before = texts.len();
         let mut unique: std::collections::HashSet<String> = texts.into_iter().collect();
         unique.extend(unitypy_texts);
@@ -305,7 +325,7 @@ pub async fn extract_texts(
         }
 
         let chunk_vec: Vec<String> = protected_chunks.iter().map(|(s, _)| s.clone()).collect();
-        let ignored_tags = config.get_active_tags(Some(out_dir.join("tbx_tags.txt")));
+        let ignored_tags = config.get_active_tags(Some(out_dir.join("tbx_tags.txt")), 1);
         
         if !detected_mismatch && src_code != "auto" && detection_attempts < 15 {
             if let Some(sample) = chunk_vec.iter().filter(|t| t.len() > 15).max_by_key(|t| t.len()) {
@@ -346,9 +366,17 @@ pub async fn extract_texts(
         let _ = tx.send(UiMsg::Progress(processed, total));
     }
 
+    let yarn_tag_re = regex::Regex::new(r"\{[0-9]+\}:\s*|\s*\{[0-9]+\}\s*").unwrap();
+
     for (i, original) in texts.iter().enumerate() {
         let trad = resolved_translations[i].clone().unwrap_or_else(|| original.clone());
-        translation_map.insert(original.clone(), trad);
+        
+        let stripped_original = yarn_tag_re.replace_all(original, "").trim().to_string();
+        let stripped_trad = yarn_tag_re.replace_all(&trad, "").trim().to_string();
+        
+        if !stripped_original.is_empty() {
+            translation_map.insert(stripped_original, stripped_trad);
+        }
     }
     
     let map_json_str = serde_json::to_string_pretty(&translation_map).unwrap();
@@ -391,65 +419,19 @@ pub fn extract_local_zip(zip_path: &Path, target_dir: &Path) -> Result<(), Strin
     Ok(())
 }
 
-/// Find the best matching local ZIP file for the given backend
-fn find_local_bepinex_zip(backend: &str) -> Option<PathBuf> {
-    let bepinex_dir = crate::paths::app_root().join("BepInEx");
-    if !bepinex_dir.is_dir() { return None; }
 
-    let entries: Vec<_> = fs::read_dir(&bepinex_dir).ok()?
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.extension().map(|e| e == "zip").unwrap_or(false))
-        .collect();
-
-    let name_lower = |p: &PathBuf| p.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
-
-    if backend == "IL2CPP" {
-        // Prefer IL2CPP or v6 zip
-        entries.iter().find(|p| {
-            let n = name_lower(p);
-            n.contains("il2cpp") || n.contains("6.0")
-        }).cloned()
-    } else {
-        // Prefer Mono / v5 zip
-        entries.iter().find(|p| {
-            let n = name_lower(p);
-            (n.contains("mono") || n.contains("5.4")) && !n.contains("il2cpp")
-        }).cloned().or_else(|| {
-            // Fallback: any BepInEx zip that's not IL2CPP
-            entries.iter().find(|p| !name_lower(p).contains("il2cpp")).cloned()
-        })
-    }
-}
-
-/// Find the best matching local XUnity ZIP
-fn find_local_xunity_zip(backend: &str) -> Option<PathBuf> {
-    let xunity_dir = crate::paths::app_root().join("XUnity_AutoTranslator_bepInEx");
-    if !xunity_dir.is_dir() { return None; }
-
-    let entries: Vec<_> = fs::read_dir(&xunity_dir).ok()?
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.extension().map(|e| e == "zip").unwrap_or(false))
-        .collect();
-
-    let name_lower = |p: &PathBuf| p.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
-
-    if backend == "IL2CPP" {
-        entries.iter().find(|p| name_lower(p).contains("il2cpp")).cloned()
-    } else {
-        entries.iter().find(|p| !name_lower(p).contains("il2cpp")).cloned()
-    }
-}
 
 pub async fn inject_texts(
     executable: &str,
     translation_folder: &str,
     target_lang: &str,
     tx: std::sync::mpsc::Sender<UiMsg>,
+    cancelled: Arc<AtomicBool>,
 ) -> Result<(), String> {
     
-    let backend = detect_unity_backend(executable).unwrap_or("Desconhecido");
+    let Some(data_dir) = detect_game_data_dir(executable) else {
+        return Err("Pasta *_Data não encontrada. Não parece ser um jogo Unity.".into());
+    };
     
     let out_dir = output_folder(executable, translation_folder, target_lang);
     let translated_json = out_dir.join("translated_texts.json");
@@ -458,200 +440,75 @@ pub async fn inject_texts(
         return Err("Nenhum arquivo JSON de tradução encontrado! Faça a extração/tradução primeiro.".into());
     }
 
-    let _ = tx.send(UiMsg::Log(format!("Gerando dicionário para XUnity.AutoTranslator (Motor: {})...", backend)));
+    let _ = tx.send(UiMsg::Log(format!("Iniciando injeção nativa de traduções na pasta: {}...", data_dir.display())));
     
-    // Ler o JSON traduzido
+    // Ler o JSON traduzido para validar
     let json_content = fs::read_to_string(&translated_json).map_err(|e| e.to_string())?;
     let translation_map: HashMap<String, String> = serde_json::from_str(&json_content).map_err(|e| format!("Erro ao ler JSON: {}", e))?;
     
     if translation_map.is_empty() {
         return Err("O JSON de tradução está vazio!".into());
     }
-
-    let mut dict_content = String::new();
-    dict_content.push_str("// Formato compativel com XUnity.AutoTranslator: Original=Traducao\n");
-    dict_content.push_str("// Gerado automaticamente pelo TBX - Translator\n\n");
     
-    for (orig, trad) in &translation_map {
-        // XUnity suporta escapes para quebras de linha
-        let safe_orig = orig.replace('\n', "\\n").replace('\r', "\\r");
-        let safe_trad = trad.replace('\n', "\\n").replace('\r', "\\r");
+    let app_root = crate::paths::app_root();
+    let extractor_dir = app_root.join("unity_static_extractor");
+    let script = extractor_dir.join("unitypy_inject.py");
+    
+    if !script.is_file() {
+        return Err(format!("Script de injeção não encontrado: {}", script.display()));
+    }
+
+    let python = if cfg!(windows) { "python" } else { "python3" };
+    let third_party_dir = extractor_dir
+        .parent()
+        .map(|root| root.join("third_party"));
         
-        // Evitar strings puramente vazias de corromper o layout
-        if safe_orig.trim().is_empty() {
-            continue;
+    let mut std_command = crate::paths::hidden_command(python);
+    std_command.arg(&script).arg(&data_dir).arg(&translated_json);
+    
+    if let Some(tp_dir) = third_party_dir.filter(|path| path.is_dir()) {
+        let mut paths = vec![tp_dir.clone(), tp_dir.join("UnityPy")];
+        if let Some(existing) = std::env::var_os("PYTHONPATH") {
+            paths.extend(std::env::split_paths(&existing));
         }
-        
-        dict_content.push_str(&format!("{}={}\n", safe_orig, safe_trad));
+        if let Ok(joined) = std::env::join_paths(paths) {
+            std_command.env("PYTHONPATH", joined);
+        }
     }
     
-    // Salvar na pasta Workspace
-    let output_txt = out_dir.join("_AutoGeneratedTranslations.txt");
-    fs::write(&output_txt, &dict_content).map_err(|e| e.to_string())?;
+    let _ = tx.send(UiMsg::Log("Aguarde, isso pode demorar alguns minutos. Os arquivos originais serão armazenados com a extensão '.bak' para segurança...".into()));
     
-    let _ = tx.send(UiMsg::Log(format!("Dicionário gerado com sucesso: {}", output_txt.display())));
+    let mut command = tokio::process::Command::from(std_command);
+    command.kill_on_drop(true);
     
-    let parent = Path::new(executable).parent().unwrap_or(Path::new("."));
-    let bepinex_dir = parent.join("BepInEx");
+    let output_fut = command.output();
+    tokio::pin!(output_fut);
     
-    // === INSTALAÇÃO DO BEPINEX A PARTIR DOS ZIPS LOCAIS ===
-    if !bepinex_dir.exists() {
-        let _ = tx.send(UiMsg::Log("BepInEx não encontrado. Instalando dos ZIPs locais...".into()));
-        
-        // 1. Instalar BepInEx
-        if let Some(bepinex_zip) = find_local_bepinex_zip(&backend) {
-            let _ = tx.send(UiMsg::Log(format!("Extraindo BepInEx de: {}", bepinex_zip.file_name().unwrap_or_default().to_string_lossy())));
-            extract_local_zip(&bepinex_zip, parent)?;
-            let _ = tx.send(UiMsg::Log("BepInEx instalado com sucesso!".into()));
-        } else {
-            return Err("ZIP do BepInEx não encontrado na pasta BepInEx/ do TBX!".into());
+    let output = loop {
+        if cancelled.load(Ordering::SeqCst) {
+            let _ = tx.send(UiMsg::Log("[Aviso] Cancelamento da injeção solicitado pelo usuário...".into()));
+            return Err("Operação cancelada pelo usuário.".into());
         }
         
-        // 2. Instalar XUnity.AutoTranslator
-        if let Some(xunity_zip) = find_local_xunity_zip(&backend) {
-            let _ = tx.send(UiMsg::Log(format!("Extraindo XUnity.AutoTranslator de: {}", xunity_zip.file_name().unwrap_or_default().to_string_lossy())));
-            extract_local_zip(&xunity_zip, parent)?;
-            let _ = tx.send(UiMsg::Log("XUnity.AutoTranslator instalado com sucesso!".into()));
-        } else {
-            let _ = tx.send(UiMsg::Log("AVISO: ZIP do XUnity.AutoTranslator não encontrado. Tradução runtime não estará disponível.".into()));
-        }
-        
-        // 3. Rodar o jogo brevemente para gerar configs iniciais do BepInEx
-        let _ = tx.send(UiMsg::Log("Iniciando jogo brevemente para gerar configs do BepInEx...".into()));
-        
-        let game_process = crate::paths::hidden_command(executable)
-            .env("WINEDLLOVERRIDES", "winhttp=n,b")
-            .spawn();
-        
-        match game_process {
-            Ok(mut child) => {
-                let _ = tx.send(UiMsg::Log("Aguardando BepInEx inicializar (10 segundos)...".into()));
-                std::thread::sleep(std::time::Duration::from_secs(10));
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = tx.send(UiMsg::Log("Jogo fechado. Configs do BepInEx gerados!".into()));
+        tokio::select! {
+            res = &mut output_fut => {
+                break res.map_err(|e| format!("Falha ao invocar Python: {}", e))?;
             }
-            Err(_) => {
-                let _ = tx.send(UiMsg::Log("(AVISO) O jogo não iniciou automaticamente (normal no Linux se for um .exe Windows).".into()));
-                let _ = tx.send(UiMsg::Log("IMPORTANTE (LINUX/PROTON): Para o BepInEx funcionar, você precisa adicionar nas opções de inicialização do jogo (Steam):".into()));
-                let _ = tx.send(UiMsg::Log("WINEDLLOVERRIDES=\"winhttp=n,b\" %command%".into()));
-            }
+            _ = tokio::time::sleep(tokio::time::Duration::from_millis(200)) => {}
         }
-        
-        // Configurar o AutoTranslatorConfig.ini para garantir que o idioma está correto
-        let config_dir = bepinex_dir.join("config");
-        let _ = fs::create_dir_all(&config_dir);
-        let config_file = config_dir.join("AutoTranslatorConfig.ini");
-        
-        let target_code = api::get_lang_code(target_lang);
-        if config_file.exists() {
-            if let Ok(mut content) = fs::read_to_string(&config_file) {
-                let re_lang = regex::Regex::new(r"(?m)^Language=.*").unwrap();
-                let re_from = regex::Regex::new(r"(?m)^FromLanguage=.*").unwrap();
-                
-                content = re_lang.replace(&content, format!("Language={}", target_code)).to_string();
-                content = re_from.replace(&content, "FromLanguage=en").to_string();
-                
-                let _ = fs::write(&config_file, content);
-                let _ = tx.send(UiMsg::Log("AutoTranslatorConfig.ini atualizado para o idioma escolhido.".into()));
-            }
-        } else {
-            let config_content = format!(
-"[Service]
-Endpoint=GoogleTranslateV2
-
-[General]
-Language={}
-FromLanguage=en
-
-[Files]
-Directory=Translation
-OutputFile=Translation\\{}\\Text\\_AutoGeneratedTranslations.txt
-
-[TextFrameworks]
-EnableUGUI=True
-EnableIMGUI=True
-EnableTextMeshPro=True
-EnableTextMesh=True
-EnableFairyGUI=True", target_code, target_code);
-            let _ = fs::write(&config_file, config_content);
-            let _ = tx.send(UiMsg::Log("Configuração do XUnity AutoTranslator gerada manualmente com sucesso!".into()));
-        }
-
-    }
-
-    // BepInEx may already be present from another mod. In that case the old
-    // flow skipped XUnity entirely, then reported a successful copy into a
-    // folder no plugin would ever read. Check the plugin independently.
-    let xunity_plugin = bepinex_dir
-        .join("plugins")
-        .join("XUnity.AutoTranslator")
-        .join("XUnity.AutoTranslator.Plugin.BepInEx.dll");
-    if !xunity_plugin.is_file() {
-        let _ = tx.send(UiMsg::Log("XUnity.AutoTranslator não encontrado. Instalando...".into()));
-        let xunity_zip = find_local_xunity_zip(&backend)
-            .ok_or_else(|| "ZIP do XUnity.AutoTranslator não encontrado na pasta XUnity_AutoTranslator_bepInEx/.".to_string())?;
-        extract_local_zip(&xunity_zip, parent)?;
-    }
-    if !xunity_plugin.is_file() {
-        return Err("XUnity.AutoTranslator não foi instalado corretamente; o plugin DLL não foi encontrado.".into());
-    }
-
-    // Always ensure the selected target language is configured, including when
-    // BepInEx was installed before this application ran.
-    let config_dir = bepinex_dir.join("config");
-    fs::create_dir_all(&config_dir).map_err(|e| format!("Falha criando config do BepInEx: {e}"))?;
-    let config_file = config_dir.join("AutoTranslatorConfig.ini");
-    let target_code = api::get_lang_code(target_lang);
-    if config_file.exists() {
-        let mut content = fs::read_to_string(&config_file).map_err(|e| format!("Falha lendo AutoTranslatorConfig.ini: {e}"))?;
-        let re_lang = regex::Regex::new(r"(?m)^Language=.*").unwrap();
-        let re_from = regex::Regex::new(r"(?m)^FromLanguage=.*").unwrap();
-        content = re_lang.replace(&content, format!("Language={}", target_code)).to_string();
-        content = re_from.replace(&content, "FromLanguage=en").to_string();
-        fs::write(&config_file, content).map_err(|e| format!("Falha atualizando AutoTranslatorConfig.ini: {e}"))?;
-    } else {
-        let config_content = format!(
-"[Service]
-Endpoint=GoogleTranslateV2
-
-[General]
-Language={}
-FromLanguage=en
-
-[Files]
-Directory=Translation
-OutputFile=Translation\\{}\\Text\\_AutoGeneratedTranslations.txt
-
-[TextFrameworks]
-EnableUGUI=True
-EnableIMGUI=True
-EnableTextMeshPro=True
-EnableTextMesh=True
-EnableFairyGUI=True", target_code, target_code);
-        fs::write(&config_file, config_content).map_err(|e| format!("Falha criando AutoTranslatorConfig.ini: {e}"))?;
-    }
-    let _ = tx.send(UiMsg::Log(format!("XUnity.AutoTranslator pronto: {}", xunity_plugin.display())));
+    };
     
-    // === COPIAR TRADUÇÃO PARA O BEPINEX ===
-    let bepinex_text_dir = bepinex_dir
-        .join("Translation")
-        .join(api::get_lang_code(target_lang)) // e.g. 'pt'
-        .join("Text");
-        
-    // Forçar a criação da pasta caso o jogo ainda não tenha sido rodado
-    if !bepinex_text_dir.exists() {
-        let _ = fs::create_dir_all(&bepinex_text_dir);
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let _ = tx.send(UiMsg::Log(line.to_owned()));
     }
     
-    let bepinex_file = bepinex_text_dir.join("_AutoGeneratedTranslations.txt");
-    if let Err(e) = fs::write(&bepinex_file, &dict_content) {
-        let _ = tx.send(UiMsg::Log(format!("Falha ao copiar dicionário para BepInEx: {}", e)));
-    } else {
-        let _ = tx.send(UiMsg::Log(format!("Dicionário injetado com sucesso na pasta do jogo!")));
-        let _ = tx.send(UiMsg::Log(format!("Arquivo: {}", bepinex_file.display())));
-        let _ = tx.send(UiMsg::Log(format!("Tudo pronto! Agora é só abrir o jogo.")));
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return Err(format!("Erro durante a injeção do UnityPy:\n{}", detail));
     }
+
+    let _ = tx.send(UiMsg::Log("Injeção concluída com sucesso! Os textos nativos do jogo foram alterados.".into()));
+    let _ = tx.send(UiMsg::Log("Tudo pronto! Agora é só abrir o jogo.".into()));
 
     Ok(())
 }

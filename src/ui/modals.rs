@@ -234,10 +234,24 @@ impl TbxApp {
 
                             } else if self.engine_modal_tab == 1 {
                                 ui.label(RichText::new("Integração:").color(Color32::from_rgb(137, 180, 250)).strong());
-                                ui.label("Utiliza extração direta de Assets (UABE / UnityPy)");
+                                ui.label("Injeção Dinâmica: Usa UnityPy para extração e BepInEx (Hooking em Memória) para injeção.");
                                 ui.add_space(8.0);
                                 ui.label(RichText::new("Compatibilidade:").color(Color32::from_rgb(137, 180, 250)).strong());
-                                ui.label("Compatível com TextAssets, MonoBehaviours e Fontes");
+                                ui.label("Suporte universal a jogos Mono e IL2CPP (Mod BepInEx 6 Bleeding Edge)");
+                                ui.add_space(8.0);
+                                ui.horizontal(|ui| {
+                                    toggle_ui(ui, &mut self.config.usar_bepinex_6, "Instalar BepInEx 6 (Bleeding Edge)");
+                                    if ui.add(egui::Button::new(" (i) ").small().fill(egui::Color32::from_rgb(49, 50, 68))).clicked() {
+                                        self.show_info_modal = Some(("BepInEx 6".into(), "Recomendado apenas para Unity 2022+ ou quando o hook nativo do BepInEx 5 falha no Windows/Linux. Os arquivos do BepInEx 6 devem estar na pasta 'third_party' do diretório do tradutor.".into()));
+                                    }
+                                });
+                                ui.add_space(8.0);
+                                ui.horizontal(|ui| {
+                                    toggle_ui(ui, &mut self.config.substituir_todas_fontes_unity, "Substituir fonte do jogo todas as fontes");
+                                    if ui.add(egui::Button::new(" (i) ").small().fill(egui::Color32::from_rgb(49, 50, 68))).clicked() {
+                                        self.show_info_modal = Some(("Substituir Todas as Fontes".into(), "Se ativado, a fonte universal irá sobrescrever completamente todas as fontes do jogo. Se desativado (Padrão), a fonte universal funcionará apenas como um fallback para fornecer os acentos que faltam, preservando o estilo original do jogo.".into()));
+                                    }
+                                });
                             } else {
                                 ui.label(RichText::new("Integração:").color(Color32::from_rgb(137, 180, 250)).strong());
                                 ui.label("Extração de arquivos .pck, parsing de strings CSV e injetor automático.");
@@ -325,6 +339,8 @@ impl TbxApp {
         self.render_themes_modal(ctx);
         self.render_tags_modal(ctx);
         self.render_info_modal(ctx);
+        self.render_inject_modal(ctx);
+        self.render_create_patch_modal(ctx);
     }
 }
 
@@ -555,10 +571,16 @@ impl TbxApp {
                 ui.add_space(6.0);
 
                 if self.tags_modal_tab == 0 {
-                    ui.label(RichText::new("Tags padrão para todos os jogos (esta lista é de uso interno e não é mutável aqui).").small());
+                    ui.label(RichText::new("Tags padrão (esta lista é baseada no motor selecionado e não é modificável).").small());
                     ui.add_space(4.0);
+                    let mut default_tags = match self.engine_mode {
+                        0 => "[name]\n[player_name]\n{b}\n{/b}\n{i}\n{/i}\n{u}\n{/u}\n{color}\n{/color}\n{w}\n{p}\n{nw}".to_string(),
+                        1 => "<b>\n</b>\n<i>\n</i>\n<u>\n</u>\n<color>\n</color>\n<size>\n</size>".to_string(),
+                        2 => "[b]\n[/b]\n[i]\n[/i]\n[u]\n[/u]\n[color]\n[/color]".to_string(),
+                        _ => String::new(),
+                    };
                     egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
-                        ui.add(egui::TextEdit::multiline(&mut self.tags_padrao).desired_width(ui.available_width()));
+                        ui.add_enabled(false, egui::TextEdit::multiline(&mut default_tags).desired_width(ui.available_width()));
                     });
                 } else if self.tags_modal_tab == 1 {
                     ui.horizontal(|ui| {
@@ -661,6 +683,165 @@ impl TbxApp {
                 let _ = std::fs::write(game_tags_path, &self.tags_jogo);
             }
             self.config.salvar();
+        }
+    }
+
+    pub fn render_inject_modal(&mut self, ctx: &egui::Context) {
+        let mut close = false;
+        let mut do_inject_dynamic = false;
+        let mut do_inject_static = false;
+
+        if self.show_inject_modal {
+            egui::Window::new("Opções de Injeção")
+                .id(egui::Id::new("InjectModal"))
+                .collapsible(false)
+                .resizable(false)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .default_pos(ctx.screen_rect().center())
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("Escolha o método de injeção da tradução:").strong().size(15.0));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let close_btn = egui::Button::new(RichText::new(" X ").color(Color32::WHITE).strong())
+                                .fill(Color32::from_rgb(237, 135, 150))
+                                .rounding(Rounding::same(4.0));
+                            if ui.add(close_btn).clicked() {
+                                close = true;
+                            }
+                        });
+                    });
+                    ui.separator();
+                    ui.add_space(8.0);
+
+                    ui.horizontal(|ui| {
+                        ui.radio_value(&mut self.use_dynamic_inject, true, "Dinâmica (BepInEx)");
+                        ui.label(RichText::new("ℹ").color(Color32::from_rgb(137, 180, 250)))
+                            .on_hover_text("Recomendado. Usa BepInEx para traduzir o jogo em tempo real na memória. Mais seguro.");
+                    });
+                    
+                    ui.add_space(4.0);
+
+                    ui.horizontal(|ui| {
+                        ui.radio_value(&mut self.use_dynamic_inject, false, "Estática (Nativo)");
+                        ui.label(RichText::new("ℹ").color(Color32::from_rgb(137, 180, 250)))
+                            .on_hover_text("Usa UnityPy para modificar os arquivos originais do jogo. Útil quando o BepInEx não funciona.");
+                    });
+
+                    ui.add_space(16.0);
+                    
+                    ui.horizontal(|ui| {
+                        let btn = egui::Button::new(RichText::new("INJETAR").strong().color(Color32::WHITE))
+                            .fill(ui.visuals().selection.bg_fill)
+                            .min_size(egui::vec2(100.0, 30.0));
+                        if ui.add(btn).clicked() {
+                            if self.use_dynamic_inject {
+                                do_inject_dynamic = true;
+                            } else {
+                                do_inject_static = true;
+                            }
+                            close = true;
+                        }
+                    });
+                });
+        }
+
+        if close {
+            self.show_inject_modal = false;
+        }
+        
+        if do_inject_dynamic {
+            self.start_unity_dynamic_inject();
+        } else if do_inject_static {
+            self.start_unity_inject();
+        }
+    }
+
+    pub fn render_create_patch_modal(&mut self, ctx: &egui::Context) {
+        let mut close = false;
+        let mut confirm = false;
+
+        if self.show_create_patch_modal {
+            egui::Window::new("Criar Patch")
+                .id(egui::Id::new("CreatePatchModal"))
+                .collapsible(false)
+                .resizable(false)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .default_pos(ctx.screen_rect().center())
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::Image::new(egui::include_image!("../../assets/language_icon.svg")).max_size(egui::vec2(20.0, 20.0)));
+                        ui.label(RichText::new("Criar patch de tradução").strong().size(15.0));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let close_btn = egui::Button::new(RichText::new(" X ").color(Color32::WHITE).strong())
+                                .fill(Color32::from_rgb(237, 135, 150))
+                                .rounding(Rounding::same(4.0));
+                            if ui.add(close_btn).clicked() {
+                                close = true;
+                            }
+                        });
+                    });
+                    ui.separator();
+                    ui.add_space(8.0);
+
+                    // Método de injeção
+                    // Ren'Py não tem injetor — o patch é sempre o tl/<idioma>. Esconde a pergunta.
+                    if self.engine_mode != 0 {
+                        ui.label("Método de injeção:");
+                        ui.horizontal(|ui| {
+                            ui.radio_value(&mut self.patch_method_embed, true, "Completo (com injetor)");
+                            ui.label(RichText::new("ℹ").color(Color32::from_rgb(137, 180, 250)))
+                                .on_hover_text("Inclui tudo que o usuário precisa: BepInEx + plugin (Unity) ou o .exe já patchado (Godot).");
+                        });
+                        ui.horizontal(|ui| {
+                            ui.radio_value(&mut self.patch_method_embed, false, "Somente arquivos de tradução");
+                            ui.label(RichText::new("ℹ").color(Color32::from_rgb(137, 180, 250)))
+                                .on_hover_text("Apenas os arquivos traduzidos, para quem já tem o injetor instalado.");
+                        });
+                        ui.add_space(12.0);
+                    }
+
+                    // Pasta de destino
+                    ui.label("Salvar em:");
+                    ui.horizontal(|ui| {
+                        let mut txt = self.patch_dest_dir.clone();
+                        if ui.add(egui::TextEdit::singleline(&mut txt).desired_width(280.0)).changed() {
+                            self.patch_dest_dir = txt;
+                        }
+                        if ui.button("📂").on_hover_text("Escolher pasta...").clicked() {
+                            if let Ok(Some(p)) = crate::ui::dialogs::pick_folder("Pasta de destino do patch") {
+                                self.patch_dest_dir = p.to_string_lossy().to_string();
+                            }
+                        }
+                    });
+
+                    ui.add_space(12.0);
+
+                    // Formato
+                    ui.label("Formato:");
+                    ui.horizontal(|ui| {
+                        ui.radio_value(&mut self.patch_as_zip, true, "Arquivo .zip");
+                        ui.radio_value(&mut self.patch_as_zip, false, "Pasta normal");
+                    });
+
+                    ui.add_space(16.0);
+
+                    ui.horizontal(|ui| {
+                        let btn = egui::Button::new(RichText::new("CRIAR PATCH").strong().color(Color32::WHITE))
+                            .fill(ui.visuals().selection.bg_fill)
+                            .min_size(egui::vec2(120.0, 30.0));
+                        if ui.add(btn).clicked() {
+                            confirm = true;
+                            close = true;
+                        }
+                    });
+                });
+        }
+
+        if close {
+            self.show_create_patch_modal = false;
+        }
+        if confirm {
+            self.start_create_patch();
         }
     }
 }

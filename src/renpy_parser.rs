@@ -1,7 +1,20 @@
 use std::collections::HashSet;
 use regex::Regex;
 
-pub fn parse_dump_content(dump_content: &str) -> Vec<(String, String, String)> {
+/// Candidato extraído do dump do jogo.
+#[derive(Debug, Clone)]
+pub struct RenpyCandidate {
+    pub text: String,
+    pub file: String,
+    pub kind: String,
+    /// Identificador nativo do RenPy (`s.identifier`) quando originado de um
+    /// nó AST. Permite gerar `translate <lang> <id>:` em vez de old/new, o
+    /// que funciona de forma robusta mesmo quando o script estava dentro de
+    /// um .rpa e melhora a filtragem (chave estável independente do texto).
+    pub identifier: Option<String>,
+}
+
+pub fn parse_dump_content(dump_content: &str) -> Vec<RenpyCandidate> {
     let mut candidates = Vec::new();
     let mut seen = HashSet::new();
 
@@ -9,23 +22,29 @@ pub fn parse_dump_content(dump_content: &str) -> Vec<(String, String, String)> {
     let re_bad = Regex::new(r"(?i)^(gui/|#|v\d+\.\d+|http|www\.|\.png|\.jpg|\.ogg|\.mp3|\.wav)").unwrap();
 
     for line in dump_content.lines() {
-        let parts: Vec<&str> = line.splitn(3, "|||").collect();
-        let (file, kind, raw_text) = if parts.len() == 3 {
-            (parts[0].to_string(), parts[1].to_string(), parts[2])
-        } else if parts.len() == 2 {
-            (parts[0].to_string(), "dialogo".to_string(), parts[1])
-        } else {
-            continue;
+        // Formato antigo (3 campos): arquivo|||tipo|||texto
+        // Formato novo (4 campos): arquivo|||tipo|||id|||texto
+        let parts: Vec<&str> = line.splitn(4, "|||").collect();
+        let (file, kind, ident, raw_text) = match parts.len() {
+            4 => (parts[0].to_string(), parts[1].to_string(), Some(parts[2].to_string()), parts[3]),
+            3 => {
+                // Repartir em 3 a partir da linha inteira para preservar texto com "|||"
+                let p3: Vec<&str> = line.splitn(3, "|||").collect();
+                (p3[0].to_string(), p3[1].to_string(), None, p3[2])
+            }
+            _ => continue,
         };
 
-        // Normalizar escapes vindos do Python
-        let text = raw_text.replace("\\n", "\n").replace("\\\"", "\"").replace("\\'", "'");
+        // Normalizar escapes vindos do Python e o placeholder do separador
+        let text = raw_text
+            .replace("{{pipe3}}", "|||")
+            .replace("\\n", "\n")
+            .replace("\\\"", "\"")
+            .replace("\\'", "'");
         let trimmed = text.trim();
         let file_lower = file.to_lowercase();
 
         // Skip interfaces bundled for authoring/debugging rather than players.
-        // Their labels (warper, spline, keyframes, etc.) were previously mixed
-        // with game dialogue when a project shipped development tools.
         let developer_tool_file = [
             "action_editor",
             "actioneditor",
@@ -45,7 +64,7 @@ pub fn parse_dump_content(dump_content: &str) -> Vec<(String, String, String)> {
 
         // Filtros avançados para evitar traduzir variáveis de sistema
         if trimmed.len() <= 1 {
-            continue; // Evitar traduzir letras solitárias como "A", "B"
+            continue;
         }
 
         // Ignorar textos puramente matemáticos, pontuações ou cores hex
@@ -59,31 +78,59 @@ pub fn parse_dump_content(dump_content: &str) -> Vec<(String, String, String)> {
         }
 
         // Heurística para variáveis internas (ex: chupard1, my_variable)
-        // Se a string NÃO tem espaços, MAS tem números ou underscores no meio das letras,
-        // é quase certeza que é um ID/Label do motor e não um texto legível.
         if !trimmed.contains(' ') {
             let has_letters = trimmed.chars().any(|c| c.is_alphabetic());
             let has_numbers_or_underscore = trimmed.chars().any(|c| c.is_ascii_digit() || c == '_');
-            
-            // Exceções: se for só número (já pego antes), ou se for algo normal.
             if has_letters && has_numbers_or_underscore {
                 continue;
             }
         }
-        
+
         // Ignorar textos que são APENAS formatação renpy (ex: "{b}{/b}")
         let text_no_tags = Regex::new(r"\{.*?\}").unwrap().replace_all(trimmed, "");
         if text_no_tags.trim().is_empty() {
             continue;
         }
 
-        // Adicionar apenas únicos por arquivo para otimizar envio à API
-        let key = format!("{}|{}", file, trimmed);
+        // Chave de dedup: usa o ID quando existir (mesmo texto = mesma linha
+        // de diálogo), senão arquivo+texto.
+        let key = match &ident {
+            Some(id) if !id.is_empty() => format!("id:{}", id),
+            _ => format!("{}|{}", file, trimmed),
+        };
         if !seen.contains(&key) {
             seen.insert(key);
-            candidates.push((text, file, kind));
+            candidates.push(RenpyCandidate {
+                text,
+                file,
+                kind,
+                identifier: ident.filter(|s| !s.is_empty()),
+            });
         }
     }
 
     candidates
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_old_and_new_format() {
+        let dump = "script.rpy|||dialogo|||Hello world!\nscript.rpy|||dialogo|||abc123def456|||Olá mundo\n";
+        let out = parse_dump_content(dump);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].identifier, None);
+        assert_eq!(out[0].text, "Hello world!");
+        assert_eq!(out[1].identifier.as_deref(), Some("abc123def456"));
+        assert_eq!(out[1].text, "Olá mundo");
+    }
+
+    #[test]
+    fn dedups_by_identifier() {
+        let dump = "a.rpy|||dialogo|||id_x|||Texto\nb.rpy|||dialogo|||id_x|||Texto\n";
+        let out = parse_dump_content(dump);
+        assert_eq!(out.len(), 1);
+    }
 }

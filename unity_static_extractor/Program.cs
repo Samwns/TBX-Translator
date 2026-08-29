@@ -188,7 +188,8 @@ namespace unity_static_extractor
             "m_Title", "title", "m_Body", "body", "m_Message", "message",
             "m_Dialogue", "dialogue", "m_Subtitle", "subtitle", "m_Label",
             "label", "m_Prompt", "prompt", "m_Question", "question",
-            "m_Choice", "choice", "m_Response", "response", "m_Content", "content"
+            "m_Choice", "choice", "m_Response", "response", "m_Content", "content",
+            "m_Localized", "localized", "m_LocalizedString", "m_Value", "value"
         };
         private static readonly HashSet<string> _textAssetJsonFieldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {

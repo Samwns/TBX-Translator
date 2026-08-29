@@ -26,9 +26,19 @@ const RENPY_CONTROL_PATTERN: &str =
 
 pub fn language_identifier(folder: &str) -> String {
     let mut identifier = String::new();
-    for character in folder.trim().chars() {
+    
+    // Replace common accents manually to avoid underscores
+    let unaccented = folder.trim().to_lowercase()
+        .replace('á', "a").replace('à', "a").replace('ã', "a").replace('â', "a")
+        .replace('é', "e").replace('è', "e").replace('ê', "e")
+        .replace('í', "i").replace('ì', "i").replace('î', "i")
+        .replace('ó', "o").replace('ò', "o").replace('õ', "o").replace('ô', "o")
+        .replace('ú', "u").replace('ù', "u").replace('û', "u")
+        .replace('ç', "c").replace('ñ', "n");
+        
+    for character in unaccented.chars() {
         let normalized = if character.is_ascii_alphanumeric() {
-            character.to_ascii_lowercase()
+            character
         } else {
             '_'
         };
@@ -146,7 +156,18 @@ pub async fn extract_texts(
     let tl_dir = game_dir.join("tl").join(&language_id);
     let temp_dir = game_dir.join("tl").join("tbx_temp");
 
-    // Cleanup
+    // Cleanup. O Ren'Py aborta com "A translation for X already exists" se um
+    // .rpy antigo no tl/<idioma> definir a MESMA string que vamos reescrever.
+    // Como cada tradução TBX sobrescreve o conteúdo da pasta, removemos sempre
+    // os .rpy gerados previamente, mesmo quando o usuário desmarcou "overwrite"
+    // (overwrite só controla re-download da API, não a higiene do tl/).
+    if tl_dir.exists() {
+        let _ = fs::remove_dir_all(&tl_dir);
+        let _ = tx.send(UiMsg::Log(format!(
+            "[Ren'Py] Limpei a pasta inteira game/tl/{}/ antes de reescrever.",
+            language_id
+        )));
+    }
     if overwrite {
         let _ = fs::remove_dir_all(&tl_dir);
     }
@@ -228,23 +249,30 @@ pub async fn extract_texts(
         return Ok(());
     }
 
-    // Parse dump using the advanced Rust Parser
+    // Ler o dump com tolerancia a truncamento (processo pode ser morto no
+    // meio da escrita). Se leitura falhar, devolver erro claro.
     let dump_content = fs::read_to_string(&dump_file).map_err(|e| e.to_string())?;
 
     let candidates = crate::renpy_parser::parse_dump_content(&dump_content);
 
     let _ = tx.send(UiMsg::Log(format!("[Diagnóstico] Dump Engine: {} linhas brutas, {} candidatos limpos e parseados.", dump_content.lines().count(), candidates.len())));
 
-    // Filter + deduplicate
+    // Filter + deduplicate. O parser ja deduplica pelo "id" nativo do RenPy
+    // quando presente; aqui so precisamos filtrar por tipo e re-dedup de
+    // seguranca.
     let mut seen: HashSet<String> = HashSet::new();
-    let mut dialogues: Vec<(String, String, String)> = Vec::new();
+    let mut dialogues: Vec<crate::renpy_parser::RenpyCandidate> = Vec::new();
 
-    for (text, file, kind) in candidates {
-        if kind == "nome" && !translate_character_names {
+    for cand in candidates {
+        if cand.kind == "nome" && !translate_character_names {
             continue;
         }
-        if seen.insert(text.clone()) {
-            dialogues.push((text, file, kind));
+        let key = match &cand.identifier {
+            Some(id) => format!("id:{}", id),
+            None => format!("{}|{}", cand.file, cand.text),
+        };
+        if seen.insert(key) {
+            dialogues.push(cand);
         }
     }
 
@@ -267,10 +295,10 @@ pub async fn extract_texts(
     let mut to_translate_indices: Vec<usize> = Vec::new();
     let mut resolved_translations: Vec<Option<String>> = vec![None; dialogues.len()];
     let mut was_cancelled = false;
-    let ignored_tags = config.get_active_tags(Some(game_dir.join("tl").join("tbx_tags.txt")));
+    let ignored_tags = config.get_active_tags(Some(game_dir.join("tl").join("tbx_tags.txt")), 0);
 
-    for (idx, (text, _, _)) in dialogues.iter().enumerate() {
-        if let Some(std_trans) = crate::dictionary::lookup(text, tgt_code) {
+    for (idx, cand) in dialogues.iter().enumerate() {
+        if let Some(std_trans) = crate::dictionary::lookup(&cand.text, tgt_code) {
             resolved_translations[idx] = Some(std_trans.to_string());
         } else {
             to_translate_indices.push(idx);
@@ -293,14 +321,14 @@ pub async fn extract_texts(
             break;
         }
 
-        let chunk_items: Vec<&(String, String, String)> = chunk_indices.iter()
+        let chunk_items: Vec<&crate::renpy_parser::RenpyCandidate> = chunk_indices.iter()
             .map(|&idx| &dialogues[idx])
             .collect();
 
         let mut texts = Vec::new();
         let prepared: Vec<Vec<RenpyTextPart>> = chunk_items
             .iter()
-            .map(|(text, _, _)| split_renpy_text(text, &renpy_control_re, &mut texts))
+            .map(|cand| split_renpy_text(&cand.text, &renpy_control_re, &mut texts))
             .collect();
 
         if !detected_mismatch && src_code != "auto" && detection_attempts < 15 {
@@ -321,7 +349,8 @@ pub async fn extract_texts(
             .unwrap_or_else(|_| vec![]);
 
         for (i, &orig_idx) in chunk_indices.iter().enumerate() {
-            let (original, _, _) = &dialogues[orig_idx];
+            let cand = &dialogues[orig_idx];
+            let original = &cand.text;
             let raw = if translated.len() == texts.len() {
                 rebuild_renpy_text(&prepared[i], &translated)
             } else {
@@ -337,31 +366,67 @@ pub async fn extract_texts(
         let _ = tx.send(UiMsg::Progress(processed, total));
     }
 
-    // Assemble final translations into writer files
-    for (i, (original, file, _)) in dialogues.iter().enumerate() {
-        let trad = resolved_translations[i].clone().unwrap_or_else(|| original.clone());
+    // Assemble final translations into writer files. Separamos entradas com
+    // identificador nativo do RenPy (traduzidas via `translate <lang> <id>:`)
+    // das demais (mantidas no formato old/new, que funciona como fallback
+    // para interfaces e menus sem id).
+    let mut id_writers: HashMap<String, Vec<(String, String, String)>> = HashMap::new();
+    let mut legacy_writers: HashMap<String, Vec<(String, String)>> = HashMap::new();
+    let mut seen_legacy_strings: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for (i, cand) in dialogues.iter().enumerate() {
+        let trad = resolved_translations[i].clone().unwrap_or_else(|| cand.text.clone());
         let target_file = if keep_structure {
-            let mut f = file.clone();
+            let mut f = cand.file.clone();
             if f.ends_with(".rpyc") { f = f[..f.len()-5].to_string() + ".rpy"; }
             f
         } else {
             "script.rpy".to_string()
         };
 
-        writers.entry(target_file).or_default().push((original.clone(), trad));
+        if let Some(id) = &cand.identifier {
+            id_writers.entry(target_file)
+                .or_default()
+                .push((id.clone(), cand.text.clone(), trad));
+        } else {
+            if !seen_legacy_strings.contains(&cand.text) {
+                seen_legacy_strings.insert(cand.text.clone());
+                legacy_writers.entry(target_file)
+                    .or_default()
+                    .push((cand.text.clone(), trad));
+            }
+        }
     }
 
-    // Write .rpy files
-    for (target_file, pairs) in &writers {
-        let out_path = tl_dir.join(target_file);
+    // Write .rpy files (entradas com ID primeiro, old/new como fallback)
+    let mut all_targets: std::collections::HashSet<String> = std::collections::HashSet::new();
+    all_targets.extend(id_writers.keys().cloned());
+    all_targets.extend(legacy_writers.keys().cloned());
+
+    for target_file in all_targets {
+        let out_path = tl_dir.join(&target_file);
         if let Some(parent) = out_path.parent() {
             let _ = fs::create_dir_all(parent);
         }
-        let mut content = format!("translate {} strings:\n\n", language_id);
-        for (original, trad) in pairs {
-            content.push_str(&format!("    old \"{}\"\n", escape_renpy(original)));
-            content.push_str(&format!("    new \"{}\"\n\n", escape_renpy(trad)));
+        let mut content = String::new();
+
+        if let Some(entries) = id_writers.get(&target_file) {
+            // Bloco nativo por identifier: mais estavel que old/new e
+            // funciona mesmo com scripts dentro de .rpa.
+            for (id, _orig, trad) in entries {
+                content.push_str(&format!("translate {} {}:\n", language_id, id));
+                content.push_str(&format!("    _ \"{}\"\n\n", escape_renpy(trad)));
+            }
         }
+
+        if let Some(pairs) = legacy_writers.get(&target_file) {
+            content.push_str(&format!("translate {} strings:\n\n", language_id));
+            for (original, trad) in pairs {
+                content.push_str(&format!("    old \"{}\"\n", escape_renpy(original)));
+                content.push_str(&format!("    new \"{}\"\n\n", escape_renpy(trad)));
+            }
+        }
+
         let _ = fs::write(&out_path, &content);
         let _ = tx.send(UiMsg::Log(format!("   -> {} criado.", target_file)));
     }
@@ -431,12 +496,24 @@ init 999 python:
     if "camada_idioma_mod" not in config.layers:
         config.layers.append("camada_idioma_mod")
 
-    # 3. Injeta o botão à força na camada indestrutível o tempo todo
+    def _tbx_tela_de_config_ativa():
+        # Botao so na tela de configuracoes/preferencias do jogo
+        for nome in ("preferences", "prefs", "config", "settings", "opcoes", "configuracoes"):
+            try:
+                if renpy.get_screen(nome):
+                    return True
+            except Exception:
+                pass
+        return False
+
     def manter_botao_ativo():
-        if not renpy.get_screen("botao_flutuante_idioma", layer="camada_idioma_mod"):
+        mostrar = _tbx_tela_de_config_ativa()
+        on = renpy.get_screen("botao_flutuante_idioma", layer="camada_idioma_mod")
+        if mostrar and not on:
             renpy.show_screen("botao_flutuante_idioma", _layer="camada_idioma_mod")
-            
-    # O motor vai checar essa injeção a cada clique que você der
+        elif not mostrar and on:
+            renpy.hide_screen("botao_flutuante_idioma", layer="camada_idioma_mod")
+
     config.interact_callbacks.append(manter_botao_ativo)
 
     # 4. Mantém o atalho de teclado 'L' como redundância
@@ -445,8 +522,8 @@ init 999 python:
 
 # A TELA DO BOTÃO
 screen botao_flutuante_idioma():
-    # Ele só vai aparecer se você estiver no Menu Principal ou em submenus
-    if main_menu or getattr(store, '_menu', False):
+    # Visivel apenas na tela de configuracoes
+    if _tbx_tela_de_config_ativa():
         textbutton "🌐 Idioma":
             align (0.98, 0.02)
             text_size 22

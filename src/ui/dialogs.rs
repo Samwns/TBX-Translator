@@ -122,3 +122,41 @@ pub fn pick_font_file(title: &str) -> Result<Option<PathBuf>, String> {
     }))
     .map_err(|_| "O seletor de fontes falhou.".to_string())
 }
+
+pub fn pick_assetbundle_file(title: &str) -> Result<Option<PathBuf>, String> {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(result) = crate::paths::hidden_command("zenity")
+            .args([
+                "--file-selection",
+                &format!("--title={title}"),
+                "--file-filter=AssetBundles (*.unity3d, *.assetbundle) | *.unity3d *.assetbundle",
+                "--file-filter=Todos os arquivos | *",
+            ])
+            .output()
+        {
+            if result.status.success() {
+                let path = String::from_utf8_lossy(&result.stdout).trim().to_owned();
+                return Ok((!path.is_empty()).then(|| PathBuf::from(path)));
+            }
+            return Ok(None);
+        }
+        if let Ok(result) = crate::paths::hidden_command("kdialog")
+            .args(["--getopenfilename", ".", "*.unity3d *.assetbundle | AssetBundles", "--title", title])
+            .output()
+        {
+            if result.status.success() {
+                let path = String::from_utf8_lossy(&result.stdout).trim().to_owned();
+                return Ok((!path.is_empty()).then(|| PathBuf::from(path)));
+            }
+            return Ok(None);
+        }
+    }
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        rfd::FileDialog::new()
+            .set_title(title)
+            .add_filter("AssetBundles", &["unity3d", "assetbundle"])
+            .pick_file()
+    }))
+    .map_err(|_| "Falha ao abrir seletor de arquivos.".to_string())
+}

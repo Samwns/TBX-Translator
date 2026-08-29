@@ -153,28 +153,48 @@ impl TbxApp {
             ui.columns(3, |cols| {
                 // Col 1: Idioma Origem
                 cols[0].label(RichText::new(t("idioma_orig", lang)).color(Color32::from_rgb(166, 173, 200)).small());
+                let mut source_changed = false;
                 egui::ComboBox::from_id_salt("combo_source_lang")
                     .selected_text(&self.selected_source_lang)
                     .width(cols[0].available_width())
                     .show_ui(&mut cols[0], |ui| {
                         for lang_name in &self.source_languages {
-                            ui.selectable_value(&mut self.selected_source_lang, lang_name.to_string(), *lang_name);
+                            if ui.selectable_value(&mut self.selected_source_lang, lang_name.to_string(), *lang_name).changed() {
+                                source_changed = true;
+                            }
                         }
                     });
+                if source_changed {
+                    self.config.idioma_origem = self.selected_source_lang.clone();
+                    let _ = self.config.salvar();
+                }
 
                 // Col 2: Idioma Alvo
                 cols[1].label(RichText::new(t("idioma_alvo", lang)).color(Color32::from_rgb(166, 173, 200)).small());
+                let mut target_changed = false;
                 egui::ComboBox::from_id_salt("combo_target_lang")
                     .selected_text(&self.selected_target_lang)
                     .width(cols[1].available_width())
                     .show_ui(&mut cols[1], |ui| {
                         for lang_name in &self.target_languages {
-                            ui.selectable_value(&mut self.selected_target_lang, lang_name.to_string(), *lang_name);
+                            if ui.selectable_value(&mut self.selected_target_lang, lang_name.to_string(), *lang_name).changed() {
+                                target_changed = true;
+                            }
                         }
                     });
+                if target_changed {
+                    self.config.idioma_alvo = self.selected_target_lang.clone();
+                    self.config.pasta_traducao = crate::renpy_extractor::language_identifier(&self.selected_target_lang);
+                    let _ = self.config.salvar();
+                }
 
                 // Col 3: Pasta de Tradução
-                cols[2].label(RichText::new(t("pasta_trad", lang)).color(Color32::from_rgb(166, 173, 200)).small());
+                let example_folder = crate::renpy_extractor::language_identifier(&self.selected_target_lang);
+                let label_text = t("pasta_trad", lang)
+                    .replace("portuguese", &example_folder)
+                    .replace("Portuguese", &example_folder);
+                    
+                cols[2].label(RichText::new(label_text).color(Color32::from_rgb(166, 173, 200)).small());
                 let edit_resp = cols[2].add(TextEdit::singleline(&mut self.config.pasta_traducao));
                 if edit_resp.lost_focus() {
                     let _ = self.config.salvar();
@@ -232,101 +252,163 @@ impl TbxApp {
             ui.add_space(14.0);
         }
 
-        // 4. Action Buttons
+        // 4. Progress bar (moved to top)
         let current_engine_running = self.running_engines[self.engine_mode as usize];
         let current_progress = self.engine_progress[self.engine_mode as usize];
-        ui.horizontal(|ui| {
-            if !current_engine_running {
-                let t_time = ctx.input(|i| i.time);
-                let pulse = (t_time * 4.0).sin() as f32 * 0.5 + 0.5; // 0.0 to 1.0
+        
+        if current_engine_running || current_progress.1 > 0 {
+            let fraction = if current_progress.1 > 0 {
+                current_progress.0 as f32 / current_progress.1 as f32
+            } else {
+                0.0
+            };
 
-                let accent = ui.visuals().selection.bg_fill;
-                let base_col = [accent.r() as f32, accent.g() as f32, accent.b() as f32];
-                let btn_text = if self.engine_mode == 0 {
-                    t("iniciar_trad_renpy", lang)
-                } else if self.engine_mode == 1 {
-                    t("iniciar_trad_unity", lang)
-                } else {
-                    t("iniciar_trad_godot", lang)
-                };
+            let text = format!("{:.1}%", fraction * 100.0);
+            self.draw_progress_bar(ui, fraction, &text);
+            ui.add_space(14.0);
+        }
 
-                let p_col = [255.0, 255.0, 255.0];
-                let btn_color = Color32::from_rgb(
-                    (base_col[0] * (1.0 - pulse * 0.2) + p_col[0] * pulse * 0.2) as u8,
-                    (base_col[1] * (1.0 - pulse * 0.2) + p_col[1] * pulse * 0.2) as u8,
-                    (base_col[2] * (1.0 - pulse * 0.2) + p_col[2] * pulse * 0.2) as u8,
-                );
+        // 5. Action Buttons
+        ui.vertical(|ui| {
+            ui.horizontal_wrapped(|ui| {
+                if !current_engine_running {
+                    let t_time = ctx.input(|i| i.time);
+                    let pulse = (t_time * 4.0).sin() as f32 * 0.5 + 0.5; // 0.0 to 1.0
 
-                let main_btn = Button::new(RichText::new(btn_text).color(ui.visuals().window_fill).strong().size(14.0))
-                    .fill(btn_color)
-                    .min_size(vec2(220.0, 38.0))
-                    .rounding(Rounding::same(6.0));
-
-                if ui.add(main_btn).clicked() {
-                    if self.check_translation_folder_exists() {
-                        self.show_overwrite_modal = true;
+                    let accent = ui.visuals().selection.bg_fill;
+                    let base_col = [accent.r() as f32, accent.g() as f32, accent.b() as f32];
+                    let btn_text = if self.engine_mode == 0 {
+                        t("iniciar_trad_renpy", lang)
+                    } else if self.engine_mode == 1 {
+                        t("iniciar_trad_unity", lang)
                     } else {
-                        self.start_translation(false);
-                    }
-                }
-                ctx.request_repaint(); // Animate continuously
+                        t("iniciar_trad_godot", lang)
+                    };
 
-                if self.engine_mode == 1 || self.engine_mode == 2 {
-                    let btn_text = if self.engine_mode == 1 { "INJETAR TRADUÇÃO (UNITY)" } else { "INJETAR TRADUÇÃO (GODOT)" };
-                    let inject_btn = Button::new(RichText::new(btn_text).color(ui.visuals().window_fill).strong().size(14.0))
-                        .fill(ui.visuals().selection.bg_fill)
-                        .min_size(vec2(180.0, 38.0))
+                    let p_col = [255.0, 255.0, 255.0];
+                    let btn_color = Color32::from_rgb(
+                        (base_col[0] * (1.0 - pulse * 0.2) + p_col[0] * pulse * 0.2) as u8,
+                        (base_col[1] * (1.0 - pulse * 0.2) + p_col[1] * pulse * 0.2) as u8,
+                        (base_col[2] * (1.0 - pulse * 0.2) + p_col[2] * pulse * 0.2) as u8,
+                    );
+
+                    let main_btn = egui::Button::new(RichText::new(btn_text).color(ui.visuals().window_fill).strong().size(14.0))
+                        .fill(btn_color)
+                        .min_size(egui::vec2(220.0, 38.0))
                         .rounding(Rounding::same(6.0));
 
-                    if ui.add(inject_btn).clicked() {
-                        if self.engine_mode == 1 {
-                            self.start_unity_inject();
+                    if ui.add(main_btn).clicked() {
+                        if self.check_translation_folder_exists() {
+                            self.show_overwrite_modal = true;
                         } else {
-                            self.start_godot_inject();
+                            self.start_translation(false);
                         }
                     }
-                }
+                    ctx.request_repaint(); // Animate continuously
 
-                let editor_btn = Button::new(RichText::new(t("abrir_editor", lang)).color(ui.visuals().text_color()).strong().size(14.0))
-                    .fill(ui.visuals().widgets.inactive.bg_fill)
-                    .min_size(vec2(200.0, 38.0))
-                    .rounding(Rounding::same(6.0));
+                    // INJETAR sempre visível: o pipeline de injeção valida
+                    // internamente a presença da tradução e mostra erro claro.
+                    // Ren'Py injeta automaticamente durante a tradução (gera game/tl/),
+                    // então o botão "Injetar" é redundante — escondemos nesse motor.
+                    if self.engine_mode != 0 {
+                        ui.add_space(8.0);
+                        let inject_icon = egui::Image::new(egui::include_image!("../../../assets/inject_icon.svg"))
+                            .max_height(18.0)
+                            .tint(ui.visuals().window_fill);
+                        let inject_btn = egui::Button::image_and_text(
+                            inject_icon,
+                            RichText::new(t("inj_trad", lang))
+                                .color(ui.visuals().window_fill).strong().size(14.0))
+                            .fill(ui.visuals().selection.bg_fill)
+                            .min_size(egui::vec2(180.0, 38.0))
+                            .rounding(Rounding::same(6.0));
 
-                if ui.add(editor_btn).clicked() {
-                    self.editor_state.load_directory(&self.game_path, &self.config.pasta_traducao, self.engine_mode as u8);
-                    self.current_tab = AppTab::Editor;
-                }
+                        if ui.add(inject_btn).clicked() {
+                            if self.engine_mode == 1 {
+                                self.show_inject_modal = true;
+                            } else {
+                                self.start_godot_inject();
+                            }
+                        }
+                    }
 
-                ui.add_space(8.0);
-                let settings_btn = Button::image(
-                    egui::Image::new(egui::include_image!("../../../assets/settings_icon.svg"))
-                        .max_height(20.0)
-                        .tint(ui.visuals().text_color())
-                )
-                    .fill(ui.visuals().widgets.inactive.bg_fill)
-                    .min_size(vec2(40.0, 38.0))
-                    .rounding(Rounding::same(6.0));
+                    // PATCH cria o pacote de tradução pronto-para-uso.
+                    // Só aparece depois que a tradução já foi extraída/gerada:
+                    // - Unity/Godot: JSON dentro de TBX_Workspace_<pasta_traducao>.
+                    // - Ren'Py: pasta game/tl/<lang>/ criada pelo injetor.
+                    let has_translation = !self.game_path.is_empty() && {
+                        let exe_path = std::path::Path::new(&self.game_path);
+                        let base = exe_path.parent().unwrap_or(std::path::Path::new("."));
+                        match self.engine_mode {
+                            0 => {
+                                let game_dir = if base.join("game").is_dir() {
+                                    base.join("game")
+                                } else {
+                                    base.to_path_buf()
+                                };
+                                // Ren'Py grava a tradução em game/tl/<language_identifier(pasta_traducao)>
+                                // (ex.: "brazilian"), não em tl/<lang_code>.
+                                let lang_id = crate::renpy_extractor::language_identifier(&self.config.pasta_traducao);
+                                let tl_dir = game_dir.join("tl").join(&lang_id);
+                                tl_dir.is_dir() && std::fs::read_dir(&tl_dir)
+                                    .map(|mut it| it.next().is_some())
+                                    .unwrap_or(false)
+                            }
+                            1 => crate::unity_extractor::output_folder(&self.game_path, &self.config.pasta_traducao, &self.config.idioma_alvo)
+                                .join("translated_texts.json").is_file(),
+                            _ => crate::godot_extractor::output_folder(&self.game_path, &self.config.pasta_traducao, &self.config.idioma_alvo)
+                                .join("translation.json").is_file(),
+                        }
+                    };
 
-                if ui.add(settings_btn).clicked() {
-                    self.engine_modal_tab = self.engine_mode as usize;
-                    self.engine_modal_single_mode = true;
-                    self.show_engine_modal = true;
-                }
-            }
-            if current_engine_running {
-                // Running task indicator and cancel button
-                ui.horizontal(|ui| {
-                    ui.vertical(|ui| {
-                        ui.add_space(10.0);
-                        let status = if current_progress.1 > 0 {
-                            format!("Traduzindo: {} / {} itens", current_progress.0, current_progress.1)
-                        } else {
-                            "Processando...".to_string()
-                        };
-                        ui.label(RichText::new(status).color(Color32::from_rgb(203, 166, 247)).strong());
-                    });
+                    if has_translation {
+                        ui.add_space(8.0);
+                        let patch_icon = egui::Image::new(egui::include_image!("../../../assets/language_icon.svg"))
+                            .max_height(18.0)
+                            .tint(ui.visuals().window_fill);
+                        let patch_btn = egui::Button::image_and_text(
+                            patch_icon,
+                            RichText::new(t("criar_patch", lang))
+                                .color(ui.visuals().window_fill).strong().size(14.0))
+                            .fill(ui.visuals().selection.bg_fill)
+                            .min_size(egui::vec2(160.0, 38.0))
+                            .rounding(Rounding::same(6.0));
+
+                        if ui.add(patch_btn).clicked() {
+                            // Abre o modal: método de injeção + pasta de destino +
+                            // formato (zip ou pasta) — depois dispara `start_create_patch`.
+                            self.show_create_patch_modal = true;
+                        }
+                    }
+
                     ui.add_space(8.0);
+                    let editor_btn = egui::Button::image_and_text(
+                        egui::Image::new(egui::include_image!("../../../assets/edit_icon.svg")).max_height(18.0).tint(ui.visuals().text_color()),
+                        RichText::new(t("abrir_editor", lang)).color(ui.visuals().text_color()).strong().size(14.0)
+                    )
+                        .fill(ui.visuals().widgets.inactive.bg_fill)
+                        .min_size(egui::vec2(200.0, 38.0))
+                        .rounding(Rounding::same(6.0));
 
+                    if ui.add(editor_btn).clicked() {
+                        self.editor_state.load_directory(&self.game_path, &self.config.pasta_traducao, self.engine_mode as u8);
+                        self.current_tab = AppTab::Editor;
+                    }
+
+                    ui.add_space(8.0);
+                    let settings_btn = egui::Button::image(
+                        egui::Image::new(egui::include_image!("../../../assets/settings_icon.svg"))
+                            .max_height(20.0)
+                            .tint(ui.visuals().text_color())
+                    )
+                    .min_size(egui::vec2(38.0, 38.0))
+                    .rounding(Rounding::same(6.0));
+
+                    if ui.add(settings_btn).clicked() {
+                        self.show_engine_modal = true;
+                        self.engine_modal_tab = self.engine_mode as usize;
+                    }
+                } else {
                     let cancel_btn = Button::image_and_text(
                         egui::Image::new(egui::include_image!("../../../assets/stop_icon.svg"))
                             .max_size(vec2(15.0, 15.0)),
@@ -338,24 +420,9 @@ impl TbxApp {
                     if ui.add(cancel_btn).clicked() {
                         self.show_cancel_modal = true;
                     }
-                });
-            }
+                }
+            });
         });
-
-        // Progress bar if running or active
-        if current_engine_running || current_progress.1 > 0 {
-            ui.add_space(10.0);
-            let fraction = if current_progress.1 > 0 {
-                current_progress.0 as f32 / current_progress.1 as f32
-            } else {
-                0.0
-            };
-
-            let bar = egui::ProgressBar::new(fraction)
-                .text(format!("{:.1}%", fraction * 100.0))
-                .animate(current_engine_running);
-            ui.add(bar);
-        }
 
         ui.add_space(14.0);
 
@@ -380,9 +447,10 @@ impl TbxApp {
             });
 
             ui.add_space(4.0);
+            let log_height = ui.available_height() - 8.0;
             ScrollArea::vertical()
                 .auto_shrink([false, false])
-                .max_height(140.0)
+                .max_height(if log_height > 60.0 { log_height } else { 140.0 })
                 .stick_to_bottom(true)
                 .id_salt("mini_log_scroll")
                 .show(ui, |ui| {

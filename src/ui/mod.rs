@@ -2,6 +2,7 @@ pub mod title_bar;
 pub mod modals;
 pub mod tabs;
 pub mod dialogs;
+pub mod progress;
 
 // TBX Translator - ui.rs
 // Creator: samwns
@@ -20,6 +21,73 @@ use egui::{
 };
 
 use crate::app_config::AppConfig;
+
+/// Copia recursivamente um diretório inteiro.
+fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let to = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_all(&entry.path(), &to)?;
+        } else {
+            std::fs::copy(entry.path(), &to)?;
+        }
+    }
+    Ok(())
+}
+
+/// Compacta um diretório em `.zip` (usando o crate `zip` já presente nas deps).
+fn zip_dir(src_dir: &std::path::Path, dest_zip: &std::path::Path) -> Result<(), String> {
+    use std::io::Write;
+    let file = std::fs::File::create(dest_zip).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::FileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    let walker = walkdir::WalkDir::new(src_dir).into_iter().filter_map(|e| e.ok());
+    for entry in walker {
+        let path = entry.path();
+        let rel = path.strip_prefix(src_dir).map_err(|e| e.to_string())?;
+        let name = rel.to_string_lossy().replace("\\", "/");
+        if path.is_dir() {
+            let _ = zip.add_directory(format!("{}/", name), options);
+        } else if path.is_file() {
+            zip.start_file(name, options).map_err(|e| e.to_string())?;
+            let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+            zip.write_all(&bytes).map_err(|e| e.to_string())?;
+        }
+    }
+    zip.finish().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Coloca `content` (arquivo ou pasta) dentro de `staging`; se `as_zip`,
+/// gera `<staging>.zip` e remove a pasta de staging.
+fn stage_zip(staging: &std::path::Path, as_zip: bool) -> Result<(), String> {
+    if as_zip {
+        let zip_path = staging.with_extension("zip");
+        zip_dir(staging, &zip_path)?;
+        let _ = std::fs::remove_dir_all(staging);
+    }
+    Ok(())
+}
+
+/// Copia o conteúdo de `src` para dentro de `dst` (arquivo ou pasta).
+fn copy_into(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    if src.is_dir() {
+        copy_dir_all(src, dst)
+    } else {
+        std::fs::create_dir_all(dst)?;
+        let name = src.file_name().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "sem nome"))?;
+        std::fs::copy(src, dst.join(name))?;
+        Ok(())
+    }
+}
+
+/// Arquivos de tradução do plugin Unity que precisam estar embutidos na DLL.
+const TBX_DLL: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/TBX_Injector/bin/Release/netstandard2.0/TBX_Injector.dll"));
+const TBX_TTF: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/NotoSansJP.ttf"));
 use crate::editor_ui::EditorState;
 use crate::font_injector::FontInjectorState;
 use crate::i18n::t;
@@ -141,6 +209,13 @@ pub struct TbxApp {
     pub tags_personalizadas: String,
     pub tags_jogo: String,
     pub show_info_modal: Option<(String, String)>, // Title, Description
+    pub show_inject_modal: bool,
+    pub use_dynamic_inject: bool,
+    // Criar Patch (gera pacote distribuível a partir da tradução existente):
+    pub show_create_patch_modal: bool,
+    pub patch_dest_dir: String,        // pasta destino escolhida pelo usuário
+    pub patch_as_zip: bool,            // true = .zip, false = pasta comum
+    pub patch_method_embed: bool,      // Godot: true = embed via gdre, false = .pck separado / Unity: BepInEx dinâmico / RenPy: pasta tl/
     // Cached languages
     pub source_languages: Vec<&'static str>,
     pub target_languages: Vec<&'static str>,
@@ -160,6 +235,10 @@ pub struct TbxApp {
 }
 
 impl TbxApp {
+    pub fn draw_progress_bar(&self, ui: &mut egui::Ui, fraction: f32, text: &str) {
+        crate::ui::progress::draw_custom_progress(ui, fraction, text);
+    }
+
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         egui_extras::install_image_loaders(&cc.egui_ctx);
         setup_custom_styles(&cc.egui_ctx);
@@ -225,21 +304,16 @@ impl TbxApp {
             show_themes_modal: false,
             show_tags_modal: false,
             tags_modal_tab: 0,
-            tags_padrao: {
-                let default_tags = "[name]\n[player_name]\n{b}\n{/b}\n{i}\n{/i}\n{u}\n{/u}\n{color}\n{/color}\n{w}\n{p}\n{nw}";
-                if !std::path::Path::new("tags_padrao.txt").exists() {
-                    let _ = std::fs::write("tags_padrao.txt", default_tags);
-                }
-                let mut content = std::fs::read_to_string("tags_padrao.txt").unwrap_or_default();
-                if content.trim().is_empty() {
-                    let _ = std::fs::write("tags_padrao.txt", default_tags);
-                    content = default_tags.to_string();
-                }
-                content
-            },
+            tags_padrao: String::new(),
             tags_personalizadas: std::fs::read_to_string("tags_personalizadas.txt").unwrap_or_default(),
             tags_jogo: String::new(),
             show_info_modal: None,
+            show_inject_modal: false,
+            use_dynamic_inject: true,
+            show_create_patch_modal: false,
+            patch_dest_dir: String::new(),
+            patch_as_zip: true,
+            patch_method_embed: true,
             source_languages: {
                 let mut langs = vec!["Detectar Automaticamente"];
                 langs.extend_from_slice(crate::api::ALL_LANGUAGES);
@@ -522,6 +596,20 @@ impl TbxApp {
         let app_config = self.config.clone();
 
         thread::spawn(move || {
+            // Ativa o motor de tradução escolhido nesta sessão. Lê antes de
+            // qualquer job para que mesmo workers paralelos usem o motor certo.
+            crate::api::set_active_engine(crate::api::ApiEngine::from_config(&api_engine));
+            let engine_enum = crate::api::ApiEngine::from_config(&api_engine);
+            let _ = tx.send(UiMsg::Log(format!(
+                "Motor de tradução: {}", engine_enum.label()
+            )));
+            let _ = tx.send(UiMsg::Log(format!(
+                "[Idiomas] source='{}' ({}), target='{}' ({})",
+                src_lang,
+                crate::api::provider_lang_code(engine_enum, &src_lang),
+                tgt_lang,
+                crate::api::provider_lang_code(engine_enum, &tgt_lang),
+            )));
             let rt = match tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
@@ -626,6 +714,173 @@ impl TbxApp {
         });
     }
 
+    /// Dispara o pipeline de patch já existente (embed/PCK/BepInEx/RenPy tl) e,
+    /// ao final, copia/compacta os artefatos para a pasta escolhida pelo
+    /// usuário no modal "Criar Patch".
+    pub fn start_create_patch(&mut self) {
+        let engine = self.engine_mode;
+        let game = self.game_path.trim().to_string();
+        let lang = self.config.idioma_alvo.clone();
+        let pasta = self.config.pasta_traducao.clone();
+        let dest_dir = self.patch_dest_dir.trim().to_string();
+        let as_zip = self.patch_as_zip;
+        let embed = self.patch_method_embed;
+        let stem = std::path::Path::new(&game)
+            .file_stem().and_then(|s| s.to_str()).unwrap_or("game").to_string();
+        let lang_code = crate::api::get_lang_code(&lang).to_lowercase().replace('-', "_");
+        let folder_name = format!("{stem}_{lang_code}_patch");
+        let staging = std::path::PathBuf::from(&dest_dir).join(&folder_name);
+
+        if dest_dir.is_empty() {
+            self.append_log("[Patch] Escolha a pasta de destino antes de criar o patch.".into());
+            self.show_alert_modal = Some((true, "Criar Patch".into(), "Escolha a pasta de destino do patch.".into()));
+            return;
+        }
+
+        // Regras de log: aba dedicada + estado por engine + sender com escopo,
+        // idêntico aos fluxos de tradução/injeção.
+        let engine_index = engine as usize;
+        if self.running_engines[engine_index] { return; }
+        self.running_engines[engine_index] = true;
+        self.engine_progress[engine_index] = (0, 0);
+        self.is_running = true;
+        self.progress = (0, 0);
+        self.progress_text = "Criando patch...".to_string();
+
+        self.create_task_log_tab(format!("Criar Patch ({})", folder_name));
+        self.engine_log_tabs[engine_index] = self.active_log_tab;
+
+        let tx = scoped_sender(engine_index, self.tx.clone());
+        let _ = tx.send(UiMsg::Log(format!("[Patch] Destino final: {}{}", staging.display(), if as_zip { ".zip" } else { "" })));
+
+        std::thread::spawn(move || {
+            let res: Result<(), String> = (|| {
+                let exe = std::path::Path::new(&game);
+                let base = exe.parent().unwrap_or(std::path::Path::new("."));
+                // Guarda anti-recursão: se staging está dentro da pasta do jogo
+                // (ou o inverso), copiar entraria em loop infinito e "trava" a UI.
+                let staging_canon = std::fs::canonicalize(&staging).unwrap_or(staging.clone());
+                let base_canon = std::fs::canonicalize(base).unwrap_or_else(|_| base.to_path_buf());
+                if staging_canon.starts_with(&base_canon) || base_canon.starts_with(&staging_canon) {
+                    return Err("A pasta de destino do patch não pode estar dentro da pasta do jogo.".into());
+                }
+                std::fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
+                match engine {
+                    0 => {
+                        // Ren'Py: o patch é o conjunto de arquivos que o app cria na pasta `game/`
+                        // durante a tradução. Para aplicar, o usuário só copia o conteúdo do
+                        // patch por cima da pasta do jogo (mescla com `game/`).
+                        //
+                        // Artefatos gerados pelo app:
+                        //   - game/tl/<idioma>/*.rpy       -> as traduções (translate strings)
+                        //   - game/tl/tbx_tags.txt         -> tags a ignorar (opcional)
+                        //   - game/tbx_boot.rpy            -> force-set do idioma + hooks
+                        //   - game/99_tbx_language_manager.rpy -> menu de idiomas (botão/tecla L)
+                        let game_dir = if base.join("game").is_dir() { base.join("game") } else { base.to_path_buf() };
+                        let lang_id = crate::renpy_extractor::language_identifier(&pasta);
+                        let tl_dir = game_dir.join("tl").join(&lang_id);
+                        if !tl_dir.is_dir() {
+                            return Err(format!("Pasta de tradução Ren'Py não encontrada: {}", tl_dir.display()));
+                        }
+                        let staging_game = staging.join("game");
+                        let dst_tl = staging_game.join("tl").join(&lang_id);
+                        std::fs::create_dir_all(&dst_tl).map_err(|e| e.to_string())?;
+                        copy_dir_all(&tl_dir, &dst_tl).map_err(|e| e.to_string())?;
+                        let _ = tx.send(UiMsg::Log(format!("[Patch] Copiado: game/tl/{}/", lang_id)));
+
+                        let tags_src = game_dir.join("tl").join("tbx_tags.txt");
+                        if tags_src.is_file() {
+                            let _ = std::fs::copy(&tags_src, staging_game.join("tl").join("tbx_tags.txt"));
+                            let _ = tx.send(UiMsg::Log("[Patch] Copiado: game/tl/tbx_tags.txt".into()));
+                        }
+                        let boot_src = game_dir.join("tbx_boot.rpy");
+                        if boot_src.is_file() {
+                            let _ = std::fs::copy(&boot_src, staging_game.join("tbx_boot.rpy"));
+                            let _ = tx.send(UiMsg::Log("[Patch] Copiado: game/tbx_boot.rpy".into()));
+                        }
+                        let manager_src = game_dir.join("99_tbx_language_manager.rpy");
+                        if manager_src.is_file() {
+                            let _ = std::fs::copy(&manager_src, staging_game.join("99_tbx_language_manager.rpy"));
+                            let _ = tx.send(UiMsg::Log("[Patch] Copiado: game/99_tbx_language_manager.rpy".into()));
+                        }
+                        let _ = embed; // Ren'Py não tem injetor — os dois modos geram o mesmo patch
+                    }
+                    1 => {
+                        if embed {
+                            // Pacote "pronto": BepInEx + plugin + traduções (tudo no staging).
+                            let bepinex_dest = staging.join("BepInEx");
+                            let plugins = bepinex_dest.join("plugins");
+                            std::fs::create_dir_all(&plugins).map_err(|e| e.to_string())?;
+                            std::fs::write(plugins.join("TBX_Injector.dll"), TBX_DLL).map_err(|e| e.to_string())?;
+                            let src = crate::unity_extractor::output_folder(&game, &pasta, &lang);
+                            let tdir = plugins.join("TBX_Translations");
+                            std::fs::create_dir_all(&tdir).map_err(|e| e.to_string())?;
+                            let mut copied = false;
+                            for f in ["translated_texts.json", "translation.json"] {
+                                let p = src.join(f);
+                                if p.is_file() {
+                                    std::fs::copy(&p, tdir.join(f)).map_err(|e| e.to_string())?;
+                                    copied = true;
+                                }
+                            }
+                            if !copied {
+                                return Err(format!("Tradução Unity não encontrada em {}", src.display()));
+                            }
+                            std::fs::write(plugins.join("TBX_Injector").with_extension("ttf"), TBX_TTF).map_err(|e| e.to_string())?;
+                            let _ = tx.send(UiMsg::Log("[Patch] Copiado: BepInEx/plugins/TBX_Injector.dll + TBX_Translations/".into()));
+                        } else {
+                            // Somente os textos traduzidos para quem já tem BepInEx.
+                            let src = crate::unity_extractor::output_folder(&game, &pasta, &lang);
+                            let mut copied = false;
+                            for f in ["translated_texts.json", "translation.json"] {
+                                let p = src.join(f);
+                                if p.is_file() {
+                                    copy_into(&p, &staging).map_err(|e| e.to_string())?;
+                                    copied = true;
+                                }
+                            }
+                            if !copied {
+                                return Err(format!("Tradução Unity não encontrada em {}", src.display()));
+                            }
+                        }
+                    }
+                    _ => {
+                        // Godot: inclui o .exe patchado que já foi gerado pela injeção.
+                        let dir = exe.parent().ok_or(" Pasta do jogo inválida")?;
+                        let stem = exe.file_stem().and_then(|s| s.to_str()).unwrap_or("game");
+                        let mut copied = 0usize;
+                        if let Ok(rd) = std::fs::read_dir(dir) {
+                            for ent in rd.flatten() {
+                                let p = ent.path();
+                                if !p.is_file() { continue; }
+                                let name = ent.file_name().to_string_lossy().to_string();
+                                if name.starts_with(&format!("{stem}_")) && name.ends_with(".exe") && !name.ends_with(".tbx_bak") {
+                                    copy_into(&p, &staging).map_err(|e| e.to_string())?;
+                                    copied += 1;
+                                }
+                            }
+                        }
+                        if copied == 0 {
+                            return Err("Nenhum executável patchado do Godot foi encontrado. Rode 'Injetar Tradução' primeiro.".into());
+                        }
+                        let _ = tx.send(UiMsg::Log(format!("[Patch] Copiados {} executável(eis) patchados do Godot.", copied)));
+                    }
+                }
+                stage_zip(&staging, as_zip)
+            })();
+            match res {
+                Ok(_) => {
+                    let _ = tx.send(UiMsg::Log("[Patch] Patch criado com sucesso.".into()));
+                    let _ = tx.send(UiMsg::Done("Patch criado!".into()));
+                }
+                Err(e) => {
+                    let _ = tx.send(UiMsg::Log(format!("[Erro] {e}")));
+                    let _ = tx.send(UiMsg::Error(format!("Falha ao criar patch: {e}")));
+                },
+            }
+        });
+    }
+
     pub fn start_unity_inject(&mut self) {
         let exe = self.game_path.trim().to_string();
         if exe.is_empty() {
@@ -655,6 +910,9 @@ impl TbxApp {
         let tx = scoped_sender(engine_index, self.tx.clone());
         let folder = self.config.pasta_traducao.clone();
         let tgt_lang = self.selected_target_lang.clone();
+        self.cancelled = Arc::new(AtomicBool::new(false));
+        self.cancelled_engines[engine_index] = self.cancelled.clone();
+        let cancelled = self.cancelled.clone();
 
         thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -663,14 +921,77 @@ impl TbxApp {
                 .unwrap();
 
             rt.block_on(async {
-                let res = crate::unity_extractor::inject_texts(&exe, &folder, &tgt_lang, tx.clone()).await;
+                let res = crate::unity_extractor::inject_texts(&exe, &folder, &tgt_lang, tx.clone(), cancelled.clone()).await;
                 match res {
                     Ok(_) => {
-                        let _ = tx.send(UiMsg::Done("Injeção Unity (XUnity AutoTranslator) realizada com sucesso!".into()));
+                        let _ = tx.send(UiMsg::Done("Injeção Nativa Unity realizada com sucesso!".into()));
                     }
                     Err(e) => {
                         let _ = tx.send(UiMsg::Log(format!("[Erro] {}", e)));
                         let _ = tx.send(UiMsg::Error(format!("Falha na injeção: {}", e)));
+                    }
+                }
+            });
+        });
+    }
+
+    pub fn start_unity_dynamic_inject(&mut self) {
+        let exe = self.game_path.trim().to_string();
+        if exe.is_empty() {
+            self.show_alert_modal = Some((
+                true,
+                "Atenção".to_string(),
+                t("erro_sem_pasta", &self.config.ui_language).to_string(),
+            ));
+            return;
+        }
+
+        let backend = match crate::unity_extractor::detect_unity_backend(&exe) {
+            Some(b) => b.to_string(),
+            None => {
+                self.show_alert_modal = Some((
+                    true,
+                    "Atenção".to_string(),
+                    "Não foi possível determinar se o jogo é Mono ou IL2CPP.".to_string(),
+                ));
+                return;
+            }
+        };
+
+        let engine_index = 1usize;
+        if self.running_engines[engine_index] { return; }
+        self.running_engines[engine_index] = true;
+        self.engine_progress[engine_index] = (0, 0);
+        self.is_running = true;
+        self.progress = (0, 0);
+        self.progress_text = "Instalando Mod Dinâmico...".to_string();
+
+        let filename = format!(
+            "{} (Mod Dinâmico)",
+            Path::new(&exe).file_name().and_then(|s| s.to_str()).unwrap_or("Jogo")
+        );
+        self.create_task_log_tab(filename);
+        self.engine_log_tabs[engine_index] = self.active_log_tab;
+
+        let tx = scoped_sender(engine_index, self.tx.clone());
+        let folder = self.config.pasta_traducao.clone();
+        let tgt_lang = self.selected_target_lang.clone();
+        let cfg_usar_bep_6 = self.config.usar_bepinex_6;
+        let substituir_todas_fontes_unity = self.config.substituir_todas_fontes_unity;
+        
+        thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+
+            rt.block_on(async {
+                let res = crate::bepinex_installer::install_dynamic_translation(&exe, &folder, &tgt_lang, tx.clone(), &backend, cfg_usar_bep_6, substituir_todas_fontes_unity).await;
+                match res {
+                    Ok(_) => {} // mensagem ok mandada no installer
+                    Err(e) => {
+                        let _ = tx.send(UiMsg::Log(format!("[Erro] {}", e)));
+                        let _ = tx.send(UiMsg::Error(format!("Falha na injeção do mod: {}", e)));
                     }
                 }
             });
@@ -710,6 +1031,8 @@ impl TbxApp {
         let strategy = crate::godot_extractor::InjectionStrategy::from_config(&self.config.godot_injection_mode);
         let locale = self.config.godot_force_locale.clone();
 
+        let cancelled = self.cancelled.clone();
+
         thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -717,7 +1040,7 @@ impl TbxApp {
                 .unwrap();
 
             rt.block_on(async {
-                let res = crate::godot_extractor::inject_translation(&exe, &folder, &src_lang, &tgt_lang, strategy, &locale, tx.clone()).await;
+                let res = crate::godot_extractor::inject_translation(&exe, &folder, &src_lang, &tgt_lang, strategy, &locale, tx.clone(), cancelled).await;
                 match res {
                     Ok(_) => {
                         // Success message is sent by inject_translation
@@ -1047,8 +1370,8 @@ pub fn setup_theme_visuals(ctx: &Context, theme: &crate::themes::AppTheme) {
 pub fn run_app(icon_data: Option<std::sync::Arc<egui::IconData>>) -> Result<(), eframe::Error> {
     let mut builder = egui::ViewportBuilder::default()
         .with_title("TBX Translator")
-        .with_inner_size([880.0, 620.0])
-        .with_min_inner_size([700.0, 500.0])
+        .with_inner_size([880.0, 680.0])
+        .with_min_inner_size([700.0, 580.0])
         .with_decorations(false) // Frameless with custom dark title bar
         .with_transparent(true);
 

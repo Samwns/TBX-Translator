@@ -11,6 +11,25 @@ use std::thread;
 use egui::{Color32, ColorImage, Context, TextureHandle, TextureOptions, Ui, Vec2};
 use rusttype::{point, Font, Scale};
 
+#[derive(Clone)]
+pub struct OnlineFont {
+    pub name: &'static str,
+    pub style: &'static str,
+    pub url: &'static str,
+}
+
+pub const CURATED_FONTS: &[OnlineFont] = &[
+    OnlineFont { name: "Roboto", style: "Moderno / Limpo", url: "https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Regular.ttf" },
+    OnlineFont { name: "Open Sans", style: "Moderno / Leitura", url: "https://github.com/googlefonts/opensans/raw/main/fonts/ttf/OpenSans-Regular.ttf" },
+    OnlineFont { name: "Oswald", style: "Títulos / Impacto", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/Oswald%5Bwght%5D.ttf" },
+    OnlineFont { name: "Press Start 2P", style: "Pixel Art / Retro", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/pressstart2p/PressStart2P-Regular.ttf" },
+    OnlineFont { name: "VT323", style: "Terminal / Pixel Art", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/vt323/VT323-Regular.ttf" },
+    OnlineFont { name: "Cinzel", style: "Fantasia / RPG / Serif", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/cinzel/Cinzel%5Bwght%5D.ttf" },
+    OnlineFont { name: "Creepster", style: "Terror / Halloween", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/creepster/Creepster-Regular.ttf" },
+    OnlineFont { name: "Comic Neue", style: "Casual / HQ", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/comicneue/ComicNeue-Regular.ttf" },
+    OnlineFont { name: "Ubuntu", style: "Linux / UI", url: "https://raw.githubusercontent.com/google/fonts/main/ufl/ubuntu/Ubuntu-Regular.ttf" },
+];
+
 pub struct FontInjectorState {
     pub engine_tab: usize, // 0 = Ren'Py, 1 = Unity
     pub is_scanning: bool,
@@ -21,7 +40,16 @@ pub struct FontInjectorState {
     pub textures: HashMap<String, (String, TextureHandle)>,
     pub unity_atlas_textures: HashMap<String, TextureHandle>,
     pub status_message: Option<(bool, String)>, // (is_error, message)
+    pub show_catalog_for: Option<String>,
+    pub is_downloading: bool,
+    pub action_to_perform: Option<(String, PathBuf)>,
+    pub catalog_search: String,
+    pub previewing_font: Option<OnlineFont>,
+    pub preview_text: String,
+    pub downloading_for_preview: bool,
+    pub downloading_font: Option<OnlineFont>,
     rx: Option<Receiver<ScanResult>>,
+    rx_dl: Option<Receiver<Result<PathBuf, String>>>,
 }
 
 enum ScanResult {
@@ -42,7 +70,16 @@ impl Default for FontInjectorState {
             textures: HashMap::new(),
             unity_atlas_textures: HashMap::new(),
             status_message: None,
+            show_catalog_for: None,
+            is_downloading: false,
+            action_to_perform: None,
+            catalog_search: String::new(),
+            previewing_font: None,
+            preview_text: "Teste: Áá Çç 123".to_string(),
+            downloading_for_preview: false,
+            downloading_font: None,
             rx: None,
+            rx_dl: None,
         }
     }
 }
@@ -82,6 +119,65 @@ impl FontInjectorState {
                 ctx.request_repaint();
             }
         }
+
+        if let Some(rx_dl) = &self.rx_dl {
+            while let Ok(res) = rx_dl.try_recv() {
+                self.is_downloading = false;
+                match res {
+                    Ok(path) => {
+                        if self.downloading_for_preview {
+                            self.previewing_font = self.downloading_font.take();
+                            self.status_message = None;
+                        } else {
+                            self.status_message = Some((false, "Fonte baixada com sucesso!".to_string()));
+                            if let Some(target_font) = self.show_catalog_for.take() {
+                                self.action_to_perform = Some((target_font, path));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        self.status_message = Some((true, format!("Falha no download da fonte: {}", e)));
+                    }
+                }
+                ctx.request_repaint();
+            }
+        }
+    }
+
+    pub fn start_download_font(&mut self, font: OnlineFont, for_preview: bool) {
+        self.is_downloading = true;
+        self.downloading_for_preview = for_preview;
+        self.downloading_font = Some(font.clone());
+        self.status_message = Some((false, format!("Baixando {}...", font.name)));
+        let (tx, rx) = channel();
+        self.rx_dl = Some(rx);
+        
+        let url = font.url.to_string();
+        let name = font.name.to_string();
+        
+        thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let res = rt.block_on(async {
+                let client = reqwest::Client::builder().user_agent("TBX-Translator/1.0").build().unwrap();
+                let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+                if !resp.status().is_success() {
+                    return Err(format!("HTTP Erro: {}", resp.status()));
+                }
+                let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+                
+                let cache_dir = dirs::data_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join("tbx_translator")
+                    .join("fonts");
+                    
+                let _ = fs::create_dir_all(&cache_dir);
+                let file_path = cache_dir.join(format!("{}.ttf", name.replace(" ", "_")));
+                
+                fs::write(&file_path, bytes).map_err(|e| e.to_string())?;
+                Ok(file_path)
+            });
+            let _ = tx.send(res);
+        });
     }
 
     pub fn start_scan_renpy(&mut self, game_path: String) {
@@ -201,6 +297,135 @@ impl FontInjectorState {
         } else if self.engine_tab == 2 {
             self.render_godot_tab(ui, ctx, game_path);
         }
+
+        self.render_catalog_modal(ctx);
+    }
+
+    fn render_catalog_modal(&mut self, ctx: &Context) {
+        let mut close = false;
+        let mut do_download = None;
+
+        if self.show_catalog_for.is_some() {
+            egui::Window::new("Catálogo de Fontes (Google Fonts)")
+                .id(egui::Id::new("CatalogModal"))
+                .collapsible(false)
+                .resizable(false)
+                .default_width(450.0)
+                .pivot(egui::Align2::CENTER_CENTER)
+                .default_pos(ctx.screen_rect().center())
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("Selecione uma fonte para baixar e substituir:").strong().size(15.0));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let close_btn = egui::Button::new(egui::RichText::new(" X ").color(Color32::WHITE).strong())
+                                .fill(Color32::from_rgb(237, 135, 150))
+                                .rounding(egui::Rounding::same(4.0));
+                            if ui.add(close_btn).clicked() {
+                                close = true;
+                            }
+                        });
+                    });
+                    ui.separator();
+                    ui.add_space(8.0);
+
+                    if self.is_downloading {
+                        ui.vertical_centered(|ui| {
+                            ui.spinner();
+                            ui.add_space(4.0);
+                            if self.downloading_for_preview {
+                                ui.label(egui::RichText::new("Baixando fonte para visualização...").color(Color32::from_rgb(137, 180, 250)).strong());
+                            } else {
+                                ui.label(egui::RichText::new("Baixando fonte...").color(Color32::from_rgb(137, 180, 250)).strong());
+                            }
+                        });
+                    } else {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("🔍 Busca:").color(Color32::from_rgb(166, 173, 200)));
+                            ui.text_edit_singleline(&mut self.catalog_search);
+                        });
+                        ui.add_space(8.0);
+                        
+                        let current_preview = self.previewing_font.clone();
+                        if let Some(preview_font) = current_preview {
+                            ui.group(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new(format!("Visualizando: {}", preview_font.name)).color(Color32::from_rgb(249, 226, 175)).strong());
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        if ui.button("Fechar").clicked() {
+                                            self.previewing_font = None;
+                                        }
+                                    });
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label("Texto:");
+                                    ui.text_edit_singleline(&mut self.preview_text);
+                                });
+                                
+                                let cache_dir = dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join("tbx_translator").join("fonts");
+                                let file_path = cache_dir.join(format!("{}.ttf", preview_font.name.replace(" ", "_")));
+                                if let Ok(bytes) = std::fs::read(&file_path) {
+                                    if let Some(font_obj) = rusttype::Font::try_from_vec(bytes) {
+                                        if let Some(tex) = crate::font_injector::rasterize_text_preview(&font_obj, &self.preview_text, 80.0) {
+                                            ui.add_space(8.0);
+                                            let aspect = tex.size[0] as f32 / tex.size[1] as f32;
+                                            let handle = ctx.load_texture("catalog_preview", tex, Default::default());
+                                            ui.add(egui::Image::new(&handle).fit_to_exact_size(Vec2::new(350.0, 350.0 / aspect)));
+                                        } else {
+                                            ui.label(egui::RichText::new("Falha ao gerar visualização.").color(Color32::from_rgb(243, 139, 168)));
+                                        }
+                                    }
+                                }
+                            });
+                            ui.add_space(8.0);
+                        }
+
+                        let search_query = self.catalog_search.to_lowercase();
+                        egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+                            for font in CURATED_FONTS {
+                                if !search_query.is_empty() && !font.name.to_lowercase().contains(&search_query) && !font.style.to_lowercase().contains(&search_query) {
+                                    continue;
+                                }
+                                ui.group(|ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.vertical(|ui| {
+                                            ui.label(egui::RichText::new(font.name).strong().size(16.0).color(Color32::WHITE));
+                                            ui.label(egui::RichText::new(font.style).small().color(Color32::from_rgb(166, 173, 200)));
+                                        });
+                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                            let dl_btn = egui::Button::new(egui::RichText::new("⬇ Baixar e Substituir").strong().color(Color32::from_rgb(17, 17, 27)))
+                                                .fill(Color32::from_rgb(166, 227, 161));
+                                            if ui.add(dl_btn).clicked() {
+                                                do_download = Some((font.clone(), false));
+                                            }
+                                            
+                                            let prev_btn = egui::Button::new(egui::RichText::new("👁 Visualizar").strong().color(Color32::from_rgb(17, 17, 27)))
+                                                .fill(Color32::from_rgb(137, 180, 250));
+                                            if ui.add(prev_btn).clicked() {
+                                                let cache_dir = dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join("tbx_translator").join("fonts");
+                                                let file_path = cache_dir.join(format!("{}.ttf", font.name.replace(" ", "_")));
+                                                if file_path.exists() {
+                                                    self.previewing_font = Some(font.clone());
+                                                } else {
+                                                    do_download = Some((font.clone(), true));
+                                                }
+                                            }
+                                        });
+                                    });
+                                });
+                                ui.add_space(4.0);
+                            }
+                        });
+                    }
+                });
+        }
+
+        if let Some((font, for_preview)) = do_download {
+            self.start_download_font(font, for_preview);
+        }
+        if close {
+            self.show_catalog_for = None;
+            self.previewing_font = None;
+        }
     }
 
     fn render_renpy_tab(&mut self, ui: &mut Ui, ctx: &Context, game_path: &str) {
@@ -247,6 +472,12 @@ impl FontInjectorState {
                                     if let Ok(Some(file)) = crate::ui::dialogs::pick_font_file("Selecione a Nova Fonte") {
                                         action_to_perform = Some((font_path.clone(), file));
                                     }
+                                }
+
+                                let btn_cat = egui::Button::new(egui::RichText::new("Catálogo").color(Color32::from_rgb(17, 17, 27)).strong())
+                                    .fill(Color32::from_rgb(166, 227, 161));
+                                if ui.add(btn_cat).clicked() {
+                                    self.show_catalog_for = Some(font_path.clone());
                                 }
 
                                 let btn_ext = egui::Button::new(egui::RichText::new("Extrair original").color(Color32::from_rgb(17, 17, 27)).strong())
@@ -366,6 +597,12 @@ impl FontInjectorState {
                                         action_to_perform = Some((font_path.clone(), file));
                                     }
                                 }
+
+                                let btn_cat = egui::Button::new(egui::RichText::new("Catálogo").color(Color32::from_rgb(17, 17, 27)).strong())
+                                    .fill(Color32::from_rgb(166, 227, 161));
+                                if ui.add(btn_cat).clicked() {
+                                    self.show_catalog_for = Some(font_path.clone());
+                                }
                             });
                         });
                     });
@@ -409,6 +646,26 @@ impl FontInjectorState {
         });
 
         ui.add_space(8.0);
+        
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("Pacote Externo:").strong().color(Color32::from_rgb(166, 173, 200)));
+            let btn_bundle = egui::Button::new(egui::RichText::new("Carregar AssetBundle (.unity3d)").strong().color(Color32::from_rgb(17, 17, 27)))
+                .fill(Color32::from_rgb(203, 166, 247));
+            if ui.add(btn_bundle).on_hover_text("Carrega um AssetBundle contendo um TMP_FontAsset.").clicked() {
+                if let Ok(Some(file)) = crate::ui::dialogs::pick_assetbundle_file("Selecione o AssetBundle da Fonte") {
+                    let game_dir = if Path::new(game_path).is_file() { Path::new(game_path).parent().unwrap_or(Path::new("")) } else { Path::new(game_path) };
+                    let config_dir = game_dir.join("BepInEx").join("config").join("TBX_Injector");
+                    let _ = fs::create_dir_all(&config_dir);
+                    let dest_font = config_dir.join("custom_font_bundle");
+                    match std::fs::copy(&file, &dest_font) {
+                        Ok(_) => self.status_message = Some((false, "AssetBundle de fonte carregado com sucesso!".to_string())),
+                        Err(e) => self.status_message = Some((true, format!("Erro ao copiar AssetBundle: {}", e))),
+                    }
+                }
+            }
+        });
+
+        ui.add_space(8.0);
 
         let fonts = self.unity_fonts.clone();
 
@@ -441,11 +698,17 @@ impl FontInjectorState {
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if is_embedded {
                                     let btn_rep = egui::Button::new(egui::RichText::new("Substituir").color(Color32::from_rgb(17, 17, 27)).strong())
-                                        .fill(Color32::from_rgb(166, 227, 161));
+                                        .fill(Color32::from_rgb(137, 180, 250));
                                     if ui.add(btn_rep).clicked() {
                                         if let Ok(Some(file)) = crate::ui::dialogs::pick_font_file("Selecione a Nova Fonte") {
                                             action_replace = Some((f_path.clone(), file));
                                         }
+                                    }
+
+                                    let btn_cat = egui::Button::new(egui::RichText::new("Catálogo").color(Color32::from_rgb(17, 17, 27)).strong())
+                                        .fill(Color32::from_rgb(166, 227, 161));
+                                    if ui.add(btn_cat).clicked() {
+                                        self.show_catalog_for = Some(f_path.clone());
                                     }
 
                                     let btn_ext = egui::Button::new(egui::RichText::new("Extrair original").color(Color32::from_rgb(17, 17, 27)).strong())
@@ -454,7 +717,20 @@ impl FontInjectorState {
                                         action_export = Some(f_path.clone());
                                     }
                                 } else {
-                                    ui.colored_label(Color32::from_rgb(166, 173, 200), "TMP / SDF (Atlas)");
+                                    let btn_rep = egui::Button::new(egui::RichText::new("Substituir (Dinâmico)").color(Color32::from_rgb(17, 17, 27)).strong())
+                                        .fill(Color32::from_rgb(249, 226, 175));
+                                    if ui.add(btn_rep).on_hover_text("Define esta fonte como Fallback Global via BepInEx (Afeta todos os textos do jogo).").clicked() {
+                                        if let Ok(Some(file)) = crate::ui::dialogs::pick_font_file("Selecione a Nova Fonte Global") {
+                                            action_replace = Some(("GLOBAL_BEPINEX_FONT".to_string(), file));
+                                        }
+                                    }
+
+                                    let btn_cat = egui::Button::new(egui::RichText::new("Catálogo").color(Color32::from_rgb(17, 17, 27)).strong())
+                                        .fill(Color32::from_rgb(166, 227, 161));
+                                    if ui.add(btn_cat).clicked() {
+                                        self.show_catalog_for = Some("GLOBAL_BEPINEX_FONT".to_string());
+                                    }
+                                    ui.colored_label(Color32::from_rgb(166, 173, 200), "TMP / SDF");
                                 }
                             });
                         });
@@ -486,12 +762,58 @@ impl FontInjectorState {
                 }
 
                 if let Some((target_font, new_font_file)) = action_replace {
-                    match inject_unity_individual(game_path, &new_font_file, &target_font) {
-                        Ok(_) => {
-                            self.status_message = Some((false, "Fonte Unity substituída com sucesso!".to_string()));
+                    if target_font == "GLOBAL_BEPINEX_FONT" {
+                        // Global BepInEx injection
+                        let game_dir = if Path::new(game_path).is_file() { Path::new(game_path).parent().unwrap_or(Path::new("")) } else { Path::new(game_path) };
+                        let config_dir = game_dir.join("BepInEx").join("config").join("TBX_Injector");
+                        if let Err(e) = fs::create_dir_all(&config_dir) {
+                            self.status_message = Some((true, format!("Erro ao criar diretório do BepInEx: {}", e)));
+                        } else {
+                            let dest_font = config_dir.join("fallback_font.ttf");
+                            match fs::copy(&new_font_file, &dest_font) {
+                                Ok(_) => {
+                                    // Remove the custom_font_bundle if they are choosing an OS font so the OS font takes priority
+                                    let _ = fs::remove_file(config_dir.join("custom_font_bundle"));
+                                    
+                                    // Update font_config.json in BepInEx/Translation where Plugin.cs expects it
+                                    let translation_dir = game_dir.join("BepInEx").join("Translation");
+                                    let _ = fs::create_dir_all(&translation_dir);
+                                    let config_path = translation_dir.join("font_config.json");
+                                    
+                                    let font_name = new_font_file.file_stem().unwrap_or_default().to_string_lossy().to_string().replace("-Regular", "");
+                                    
+                                    let mut config_json = serde_json::json!({
+                                        "fallbackFontName": font_name,
+                                        "fontSizeMultiplier": 1.0,
+                                        "fontSizeOffset": 0
+                                    });
+                                    if let Ok(existing_content) = fs::read_to_string(&config_path) {
+                                        if let Ok(mut parsed) = serde_json::from_str::<serde_json::Value>(&existing_content) {
+                                            parsed["fallbackFontName"] = serde_json::Value::String(font_name);
+                                            config_json = parsed;
+                                        }
+                                    }
+                                    let _ = fs::write(&config_path, serde_json::to_string_pretty(&config_json).unwrap_or_default());
+                                    
+                                    // Open the directory so the user can install the font
+                                    #[cfg(target_os = "windows")]
+                                    let _ = std::process::Command::new("explorer").arg(config_dir.to_str().unwrap()).spawn();
+                                    
+                                    self.status_message = Some((false, "Fonte configurada! IMPORTANTE: Instale o arquivo .ttf no Windows (dois cliques) para o Unity reconhecer!".to_string()));
+                                }
+                                Err(e) => {
+                                    self.status_message = Some((true, format!("Erro ao copiar arquivo da fonte: {}", e)));
+                                }
+                            }
                         }
-                        Err(e) => {
-                            self.status_message = Some((true, format!("Erro ao substituir fonte Unity: {}", e)));
+                    } else {
+                        match inject_unity_individual(game_path, &new_font_file, &target_font) {
+                            Ok(_) => {
+                                self.status_message = Some((false, "Fonte Unity substituída com sucesso!".to_string()));
+                            }
+                            Err(e) => {
+                                self.status_message = Some((true, format!("Erro ao substituir fonte Unity: {}", e)));
+                            }
                         }
                     }
                 }
@@ -520,7 +842,7 @@ impl FontInjectorState {
         });
     }
 
-    fn get_or_create_preview_texture(
+    pub fn get_or_create_preview_texture(
         &mut self,
         ctx: &Context,
         key: &str,
@@ -535,7 +857,7 @@ impl FontInjectorState {
 
         let font_data = fs::read(font_file).ok()?;
         let font = Font::try_from_vec(font_data)?;
-        let color_image = rasterize_text_preview(&font, text)?;
+        let color_image = rasterize_text_preview(&font, text, 28.0)?;
         let handle = ctx.load_texture(format!("font_preview_{}", key), color_image, TextureOptions::LINEAR);
         self.textures.insert(key.to_string(), (text.to_string(), handle.clone()));
         Some(handle)
@@ -564,12 +886,12 @@ impl FontInjectorState {
     }
 }
 
-fn rasterize_text_preview(font: &Font, text: &str) -> Option<ColorImage> {
+fn rasterize_text_preview(font: &Font, text: &str, font_size: f32) -> Option<ColorImage> {
     if text.is_empty() {
         return None;
     }
 
-    let scale = Scale::uniform(28.0);
+    let scale = Scale::uniform(font_size);
     let v_metrics = font.v_metrics(scale);
     let glyphs: Vec<_> = font.layout(text, scale, point(0.0, v_metrics.ascent)).collect();
     let width = glyphs.iter().map(|g| g.position().x + g.unpositioned().h_metrics().advance_width).last().unwrap_or(0.0).ceil().max(1.0) as usize;

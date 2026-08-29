@@ -2,9 +2,82 @@ use reqwest::Client;
 use serde_json::Value;
 use std::{
     collections::HashMap,
-    sync::{Mutex, OnceLock},
+    sync::{Mutex, OnceLock, RwLock},
 };
 use regex::Regex;
+
+/// Mecanismo de tradução motorizando a pipeline. Cada variante corresponde a
+/// um backend real. O valor ativo é definido uma vez por sessão de tradução
+/// via [`set_active_engine`] a partir do `motor_api` salvo no config.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ApiEngine {
+    /// Endpoint clássico `translate.googleapis.com/translate_a/single?client=gtx`.
+    /// Mantido por compatibilidade — é o que sempre usamos.
+    GoogleLegacy,
+    /// Endpoint "mais recente" do Google, usado pelo app/interface web nova
+    /// (`translate-pa.googleapis.com` com `client=at`). Resposta é levemente
+    /// diferente mas grátis da mesma forma.
+    GoogleV2,
+    /// API pública gratuita do MyMemory (`api.mymemory.translated.net`).
+    /// Limite diário generoso e sem chave.
+    MyMemory,
+    /// LibreTranslate (instância pública `libretranslate.de`). Open source,
+    /// bem mais lenta, mas útil como fallback.
+    LibreTranslate,
+    /// DeepL API Free — requer chave em `DEEPL_API_KEY` env var.
+    DeepLFree,
+}
+
+impl ApiEngine {
+    pub fn from_config(value: &str) -> Self {
+        let v = value.to_ascii_lowercase();
+        if v.contains("mymemory") { return Self::MyMemory; }
+        if v.contains("libre") { return Self::LibreTranslate; }
+        if v.contains("deepl") { return Self::DeepLFree; }
+        // Google v2 precisa casar ANTES do legado, porque ambos começam com
+        // "google". Marcadores da v2: "nova", "v2", "(nov", "new".
+        if v.contains("nova") || v.contains("v2") || v.contains("(nov") || v.contains("new") {
+            return Self::GoogleV2;
+        }
+        // Qualquer outro valor (incluindo o legado "Google Translator"
+        // persistido em configs antigas) cai no endpoint legacy.
+        Self::GoogleLegacy
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::GoogleLegacy => "API Google (legacy)",
+            Self::GoogleV2 => "API Google",
+            Self::MyMemory => "MyMemory",
+            Self::LibreTranslate => "LibreTranslate",
+            Self::DeepLFree => "DeepL Free",
+        }
+    }
+
+    /// Lista canônica usada para popular pickers na UI.
+    pub const ALL: &'static [ApiEngine] = &[
+        Self::GoogleLegacy,
+        Self::GoogleV2,
+        Self::MyMemory,
+        Self::LibreTranslate,
+        Self::DeepLFree,
+    ];
+}
+
+fn active_engine() -> &'static RwLock<ApiEngine> {
+    static E: OnceLock<RwLock<ApiEngine>> = OnceLock::new();
+    E.get_or_init(|| RwLock::new(ApiEngine::GoogleLegacy))
+}
+
+pub fn set_active_engine(engine: ApiEngine) {
+    if let Ok(mut g) = active_engine().write() {
+        *g = engine;
+    }
+}
+
+pub fn current_engine() -> ApiEngine {
+    active_engine().read().map(|g| *g).unwrap_or(ApiEngine::GoogleLegacy)
+}
 
 fn global_request_limiter() -> &'static tokio::sync::Semaphore {
     static LIMITER: OnceLock<tokio::sync::Semaphore> = OnceLock::new();
@@ -110,13 +183,46 @@ async fn translate_one_internal(
     from_lang: &str,
     to_lang: &str,
 ) -> Result<String, String> {
-    let cache_key = (from_lang.to_string(), to_lang.to_string(), line.to_string());
+    let engine = current_engine();
+    // Normaliza os códigos de idioma para o formato esperado por este provider.
+    // (Google/MyMemory usam "pt-BR"; LibreTranslate "pt"; DeepL "PT-BR"/"PT".)
+    let from_norm = provider_lang_code(engine, from_lang);
+    let to_norm = provider_lang_code(engine, to_lang);
+    let from_lang: &str = &from_norm;
+    let to_lang: &str = &to_norm;
+    // Chave de cache inclui a engine para que trocar de motor não leia
+    // resultados antigos de outro provedor.
+    let cache_key = (
+        format!("{:?}|{}", engine, from_lang),
+        to_lang.to_string(),
+        line.to_string(),
+    );
     if let Ok(cache) = translation_cache().lock() {
         if let Some(translated) = cache.get(&cache_key) {
             return Ok(translated.clone());
         }
     }
 
+    let result = match engine {
+        ApiEngine::GoogleLegacy => translate_google_legacy(client, line, from_lang, to_lang).await,
+        ApiEngine::GoogleV2 => translate_google_v2(client, line, from_lang, to_lang).await,
+        ApiEngine::MyMemory => translate_mymemory(client, line, from_lang, to_lang).await,
+        ApiEngine::LibreTranslate => translate_libretranslate(client, line, from_lang, to_lang).await,
+        ApiEngine::DeepLFree => translate_deepl_free(client, line, from_lang, to_lang).await,
+    }?;
+
+    if let Ok(mut cache) = translation_cache().lock() {
+        cache.insert(cache_key, result.clone());
+    }
+    Ok(result)
+}
+
+async fn translate_google_legacy(
+    client: &Client,
+    line: &str,
+    from_lang: &str,
+    to_lang: &str,
+) -> Result<String, String> {
     let encoded = urlencoding::encode(line);
     let uri = format!(
         "https://translate.googleapis.com/translate_a/single?client=gtx&sl={}&tl={}&dt=t&q={}",
@@ -156,9 +262,6 @@ async fn translate_one_internal(
                                 .collect();
 
                             if !translated.is_empty() {
-                                if let Ok(mut cache) = translation_cache().lock() {
-                                    cache.insert(cache_key.clone(), translated.clone());
-                                }
                                 return Ok(translated);
                             }
                         }
@@ -176,6 +279,239 @@ async fn translate_one_internal(
         }
     }
     Err("O tradutor não respondeu após três tentativas".to_string())
+}
+
+/// Endpoint "novo" do Google usado pela extensão oficial Chrome / clientes
+/// mobile (`clients5.google.com/translate_a/t?client=dict-chrome-ex`).
+/// Resposta é `["texto traduzido"]` (array de strings) — mais simples que o
+/// endpoint gtx e aceita `pt-BR`/`pt-PT`/`es`/`en` etc.
+async fn translate_google_v2(
+    client: &Client,
+    line: &str,
+    from_lang: &str,
+    to_lang: &str,
+) -> Result<String, String> {
+    let encoded = urlencoding::encode(line);
+    let uri = format!(
+        "https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl={}&tl={}&q={}",
+        from_lang, to_lang, encoded
+    );
+
+    for attempt in 0..3u64 {
+        let _permit = global_request_limiter().acquire().await
+            .map_err(|_| "Limitador global de tradução foi encerrado".to_string())?;
+        let res = client
+            .get(&uri)
+            .header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+            .header("Accept", "application/json")
+            .send()
+            .await;
+
+        match res {
+            Ok(response) => {
+                if (response.status().as_u16() == 429 || response.status().is_server_error()) && attempt < 2 {
+                    drop(_permit);
+                    tokio::time::sleep(std::time::Duration::from_millis(750 * (1 << attempt))).await;
+                    continue;
+                }
+                if !response.status().is_success() {
+                    return Err(format!("Google Translate (v2/chrome) respondeu HTTP {}", response.status()));
+                }
+                let json_text = response.text().await.map_err(|e| format!("Não foi possível ler a resposta da tradução: {e}"))?;
+                if let Ok(v) = serde_json::from_str::<Value>(&json_text) {
+                    // Resposta no formato ["texto traduzido"] — array de strings.
+                    if let Some(arr) = v.as_array() {
+                        let translated: String = arr.iter()
+                            .filter_map(|s| s.as_str())
+                            .collect();
+                        if !translated.is_empty() {
+                            return Ok(translated);
+                        }
+                    }
+                    // Fallback: às vezes vem como {"sentences":[{"trans":"..."}]}
+                    if let Some(sents) = v.get("sentences").and_then(|s| s.as_array()) {
+                        let translated: String = sents.iter()
+                            .filter_map(|s| s.get("trans").and_then(|t| t.as_str()))
+                            .collect();
+                        if !translated.is_empty() {
+                            return Ok(translated);
+                        }
+                    }
+                }
+                return Err("Google Translate (v2/chrome) retornou resposta inválida.".to_string());
+            }
+            Err(_) if attempt < 2 => {
+                drop(_permit);
+                tokio::time::sleep(std::time::Duration::from_millis(500 * (1 << attempt))).await;
+                continue;
+            }
+            Err(error) => return Err(format!("Não foi possível acessar Google Translate (v2/chrome): {error}")),
+        }
+    }
+    Err("Google Translate (v2/chrome) não respondeu após três tentativas".to_string())
+}
+
+/// MyMemory API — pública e gratuita (limite ~10k chars/dia anônimo).
+async fn translate_mymemory(
+    client: &Client,
+    line: &str,
+    from_lang: &str,
+    to_lang: &str,
+) -> Result<String, String> {
+    let encoded = urlencoding::encode(line);
+    let pair = format!("{}|{}", from_lang, to_lang);
+    let uri = format!(
+        "https://api.mymemory.translated.net/get?q={}&langpair={}",
+        encoded, urlencoding::encode(&pair)
+    );
+
+    for attempt in 0..3u64 {
+        let _permit = global_request_limiter().acquire().await
+            .map_err(|_| "Limitador global de tradução foi encerrado".to_string())?;
+        let res = client.get(&uri).header("User-Agent", "Mozilla/5.0").send().await;
+        match res {
+            Ok(response) => {
+                if (response.status().as_u16() == 429 || response.status().is_server_error()) && attempt < 2 {
+                    drop(_permit);
+                    tokio::time::sleep(std::time::Duration::from_millis(750 * (1 << attempt))).await;
+                    continue;
+                }
+                if !response.status().is_success() {
+                    return Err(format!("MyMemory respondeu HTTP {}", response.status()));
+                }
+                let json_text = response.text().await.map_err(|e| e.to_string())?;
+                if let Ok(v) = serde_json::from_str::<Value>(&json_text) {
+                    if let Some(t) = v.pointer("/responseData/translatedText").and_then(|v| v.as_str()) {
+                        if !t.is_empty() {
+                            return Ok(t.to_string());
+                        }
+                    }
+                }
+                return Err("MyMemory retornou resposta inválida.".to_string());
+            }
+            Err(_) if attempt < 2 => {
+                drop(_permit);
+                tokio::time::sleep(std::time::Duration::from_millis(500 * (1 << attempt))).await;
+                continue;
+            }
+            Err(error) => return Err(format!("Não foi possível acessar MyMemory: {error}")),
+        }
+    }
+    Err("MyMemory não respondeu após três tentativas".to_string())
+}
+
+/// LibreTranslate — instância pública `libretranslate.de` (sem chave).
+async fn translate_libretranslate(
+    client: &Client,
+    line: &str,
+    from_lang: &str,
+    to_lang: &str,
+) -> Result<String, String> {
+    let body = serde_json::json!({
+        "q": line,
+        "source": from_lang,
+        "target": to_lang,
+        "format": "text",
+    });
+
+    for attempt in 0..3u64 {
+        let _permit = global_request_limiter().acquire().await
+            .map_err(|_| "Limitador global de tradução foi encerrado".to_string())?;
+        let res = client
+            .post("https://libretranslate.de/translate")
+            .header("Content-Type", "application/json")
+            .header("User-Agent", "Mozilla/5.0")
+            .body(body.to_string())
+            .send()
+            .await;
+        match res {
+            Ok(response) => {
+                if (response.status().as_u16() == 429 || response.status().is_server_error()) && attempt < 2 {
+                    drop(_permit);
+                    tokio::time::sleep(std::time::Duration::from_millis(750 * (1 << attempt))).await;
+                    continue;
+                }
+                if !response.status().is_success() {
+                    return Err(format!("LibreTranslate respondeu HTTP {}", response.status()));
+                }
+                let json_text = response.text().await.map_err(|e| e.to_string())?;
+                if let Ok(v) = serde_json::from_str::<Value>(&json_text) {
+                    if let Some(t) = v.get("translatedText").and_then(|v| v.as_str()) {
+                        if !t.is_empty() {
+                            return Ok(t.to_string());
+                        }
+                    }
+                }
+                return Err("LibreTranslate retornou resposta inválida.".to_string());
+            }
+            Err(_) if attempt < 2 => {
+                drop(_permit);
+                tokio::time::sleep(std::time::Duration::from_millis(500 * (1 << attempt))).await;
+                continue;
+            }
+            Err(error) => return Err(format!("Não foi possível acessar LibreTranslate: {error}")),
+        }
+    }
+    Err("LibreTranslate não respondeu após três tentativas".to_string())
+}
+
+/// DeepL API Free — requer variável de ambiente `DEEPL_API_KEY`.
+async fn translate_deepl_free(
+    client: &Client,
+    line: &str,
+    from_lang: &str,
+    to_lang: &str,
+) -> Result<String, String> {
+    let key = std::env::var("DEEPL_API_KEY")
+        .map_err(|_| "DeepL Free requer DEEPL_API_KEY no ambiente.".to_string())?;
+    // DeepL usa códigos maiúsculos tipo EN/PT-BR.
+    let from = from_lang.replace('_', "-").to_uppercase();
+    let to = to_lang.replace('_', "-").to_uppercase();
+    let body = serde_json::json!({
+        "text": [line],
+        "source_lang": from,
+        "target_lang": to,
+    });
+
+    for attempt in 0..3u64 {
+        let _permit = global_request_limiter().acquire().await
+            .map_err(|_| "Limitador global de tradução foi encerrado".to_string())?;
+        let res = client
+            .post("https://api-free.deepl.com/v2/translate")
+            .header("Authorization", format!("DeepL-Auth-Key {key}"))
+            .header("Content-Type", "application/json")
+            .body(body.to_string())
+            .send()
+            .await;
+        match res {
+            Ok(response) => {
+                if (response.status().as_u16() == 429 || response.status().is_server_error()) && attempt < 2 {
+                    drop(_permit);
+                    tokio::time::sleep(std::time::Duration::from_millis(750 * (1 << attempt))).await;
+                    continue;
+                }
+                if !response.status().is_success() {
+                    return Err(format!("DeepL respondeu HTTP {}", response.status()));
+                }
+                let json_text = response.text().await.map_err(|e| e.to_string())?;
+                if let Ok(v) = serde_json::from_str::<Value>(&json_text) {
+                    if let Some(t) = v.pointer("/translations/0/text").and_then(|v| v.as_str()) {
+                        if !t.is_empty() {
+                            return Ok(t.to_string());
+                        }
+                    }
+                }
+                return Err("DeepL retornou resposta inválida.".to_string());
+            }
+            Err(_) if attempt < 2 => {
+                drop(_permit);
+                tokio::time::sleep(std::time::Duration::from_millis(500 * (1 << attempt))).await;
+                continue;
+            }
+            Err(error) => return Err(format!("Não foi possível acessar DeepL: {error}")),
+        }
+    }
+    Err("DeepL não respondeu após três tentativas".to_string())
 }
 
 async fn translate_visible_segment(
@@ -233,11 +569,12 @@ async fn translate_preserving_lines(
 fn find_next_markup(text: &str, protected_words: &[String]) -> Option<(usize, usize)> {
     static RE: OnceLock<Regex> = OnceLock::new();
     let re = RE.get_or_init(|| Regex::new(r"(?x)
-        \[[^\]]*\] |
-        \{[^}]*\} |
-        <[^>]*> |
+        \[[^\]]*\](?::\s*)? |
+        \{[^}]*\}(?::\s*)? |
+        <[^>]*>(?:/)? |
         %\([^)]+\)[sdf] |
-        %[sdf]
+        %[sdf] |
+        \b[A-Za-z0-9.]*_[A-Za-z0-9_.]*(?:\s*\(\d+\))?
     ").unwrap());
     
     let mut earliest: Option<(usize, usize)> = None;
@@ -588,7 +925,8 @@ pub fn get_lang_code(name: &str) -> &'static str {
         "Pashto" | "ps" => "ps",
         "Persian" | "fa" => "fa",
         "Polish" | "pl" => "pl",
-        "Portuguese" | "pt" | "Português" | "português" | "portuguese" => "pt",
+        "Portuguese" | "pt" | "Português" | "português" | "portuguese" | "Portuguese (Portugal)" | "Português (Portugal)" => "pt",
+        "Portuguese (Brazil)" | "Português (Brasil)" | "pt-BR" | "pt_BR" => "pt-BR",
         "Punjabi" | "pa" => "pa",
         "Romanian" | "ro" => "ro",
         "Russian" | "Russo" | "russo" | "ru" => "ru",
@@ -624,8 +962,23 @@ pub fn get_lang_code(name: &str) -> &'static str {
     }
 }
 
+/// Normaliza um locale ("pt_BR", "pt-br", "pt") para o código base usado
+/// pela API ("pt"). Útil para comparar locales equivalentes.
+pub fn get_lang_code_of_locale(locale: &str) -> String {
+    locale.replace('-', "_")
+        .split('_')
+        .next()
+        .unwrap_or(locale)
+        .to_ascii_lowercase()
+}
+
 pub fn get_lang_name(code: &str) -> &'static str {
-    let base_code = code.split('_').next().unwrap_or(code);
+    // Caso especial: pt-BR tem nome próprio; caso contrário usa o prefixo base.
+    let normalized = code.replace('_', "-");
+    if normalized.eq_ignore_ascii_case("pt-br") {
+        return "Português (Brasil)";
+    }
+    let base_code = code.split(['_', '-']).next().unwrap_or(code);
     match base_code {
         "af" => "Afrikaans",
         "sq" => "Albanian",
@@ -700,6 +1053,7 @@ pub fn get_lang_name(code: &str) -> &'static str {
         "fa" => "Persian",
         "pl" => "Polish",
         "pt" => "Portuguese",
+        "pt-BR" => "Português (Brasil)",
         "pa" => "Punjabi",
         "ro" => "Romanian",
         "ru" => "Russian",
@@ -732,6 +1086,33 @@ pub fn get_lang_name(code: &str) -> &'static str {
         "yo" => "Yoruba",
         "zu" => "Zulu",
         _ => "Detectar Automaticamente",
+    }
+}
+
+/// Converte um código canônico interno (ex: "pt-BR", "en", "pt") para o formato
+/// esperado pelo provedor. Google aceita tanto "pt" quanto "pt-BR". MyMemory
+/// aceita "pt-BR"/"pt-PT". LibreTranslate só aceita ISO 639-1 ("pt").
+/// DeepL quer maiúsculas e distingue "PT-BR" de "PT-PT".
+pub fn provider_lang_code(engine: ApiEngine, code: &str) -> String {
+    let norm = code.replace('_', "-");
+    let lower = norm.to_ascii_lowercase();
+    let is_pt_br = lower == "pt-br";
+    let is_pt = lower == "pt";
+    match engine {
+        ApiEngine::GoogleLegacy | ApiEngine::GoogleV2 => {
+            if is_pt_br { "pt-BR".into() } else if is_pt { "pt".into() } else { norm }
+        }
+        ApiEngine::MyMemory => {
+            if is_pt_br { "pt-BR".into() } else if is_pt { "pt-PT".into() } else { norm }
+        }
+        ApiEngine::LibreTranslate => {
+            lower.split('-').next().unwrap_or(&lower).to_string()
+        }
+        ApiEngine::DeepLFree => {
+            if is_pt_br { "PT-BR".into() }
+            else if is_pt { "PT-PT".into() }
+            else { norm.to_uppercase() }
+        }
     }
 }
 
@@ -809,6 +1190,7 @@ pub const ALL_LANGUAGES: &[&str] = &[
     "Persian",
     "Polish",
     "Portuguese",
+    "Português (Brasil)",
     "Punjabi",
     "Romanian",
     "Russian",

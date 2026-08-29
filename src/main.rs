@@ -11,6 +11,7 @@ mod renpy_parser;
 mod unity_extractor;
 mod godot_pck;
 pub mod godot_extractor;
+pub mod gdre_tools;
 mod editor_ui;
 mod font_injector;
 pub mod dictionary;
@@ -21,6 +22,7 @@ mod sound;
 mod updater;
 mod themes;
 mod ui;
+pub mod bepinex_installer;
 
 fn load_icon() -> Option<std::sync::Arc<egui::IconData>> {
     let image_bytes = include_bytes!("../assets/com.tbx.translator.png");

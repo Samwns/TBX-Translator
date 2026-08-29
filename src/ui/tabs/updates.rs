@@ -110,11 +110,8 @@ impl TbxApp {
                     } else {
                         0.0
                     };
-                    ui.add(
-                        ProgressBar::new(fraction)
-                            .show_percentage()
-                            .animate(total == 0),
-                    );
+                    let text = format!("{:.1}%", fraction * 100.0);
+                    self.draw_progress_bar(ui, fraction, &text);
                 }
             });
 

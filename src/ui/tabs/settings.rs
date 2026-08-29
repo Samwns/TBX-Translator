@@ -30,11 +30,30 @@ impl TbxApp {
 
             ui.add_space(8.0);
 
-            // API Engine
+            // API Engine — picker com todos os provedores suportados.
             ui.horizontal(|ui| {
                 ui.label(RichText::new("Motor de Tradução (API):").color(Color32::from_rgb(205, 214, 244)).strong());
-                ui.label(RichText::new("Google Translator (Nativo Gratuito)").color(Color32::from_rgb(166, 227, 161)).strong());
+                let current = crate::api::ApiEngine::from_config(&self.config.motor_api);
+                let mut selected = current;
+                egui::ComboBox::from_id_salt("motor_api_picker")
+                    .selected_text(RichText::new(current.label()).color(Color32::from_rgb(166, 227, 161)).strong())
+                    .show_ui(ui, |ui| {
+                        for engine in crate::api::ApiEngine::ALL {
+                            ui.selectable_value(&mut selected, *engine, engine.label());
+                        }
+                    });
+                if selected != current {
+                    self.config.motor_api = selected.label().to_string();
+                }
             });
+            // Aviso DeepL precisa de chave.
+            if crate::api::ApiEngine::from_config(&self.config.motor_api) == crate::api::ApiEngine::DeepLFree {
+                ui.label(
+                    RichText::new("⚠ DeepL Free requer a variável de ambiente DEEPL_API_KEY.")
+                        .color(Color32::from_rgb(249, 226, 175))
+                        .small(),
+                );
+            }
 
             ui.add_space(8.0);
 
